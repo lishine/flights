@@ -11,8 +11,32 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
+import type { Update } from 'typegram';
+
+export interface Env {
+	BOT_TOKEN: string;
+}
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hhhhhhhhello World!');
+		if (request.method === 'POST') {
+			const update: Update.MessageUpdate = await request.json();
+
+			// Type guard for messages
+			const chatId = update.message.chat.id;
+
+			// Reply
+			await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					chat_id: chatId,
+					text: 'Hello from Cloudflare Worker 👋',
+				}),
+			});
+
+			return new Response('ok');
+		}
+
+		return new Response('Hello World!');
 	},
 } satisfies ExportedHandler<Env>;
