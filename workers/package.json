@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"prebuild": "node increment-version.js",
-		"deploy": "wrangler deploy",
+		"deploy": "pnpm run build && wrangler deploy",
 		"build": "esbuild src/index.ts --bundle --outfile=dist/worker.js --format=esm --target=es2022",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
@@ -19,6 +19,7 @@
 		"wrangler": "^4.39.0"
 	},
 	"dependencies": {
+		"prettier": "^3.6.2",
 		"typegram": "^5.2.0"
 	}
 }
