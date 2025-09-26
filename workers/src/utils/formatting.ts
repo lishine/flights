@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon'
 import { getCurrentFlightData } from '../services/flightData'
 import type { Env } from '../index'
 import type { Flight } from '../types'
@@ -13,15 +14,15 @@ export async function formatTrackingList(userFlights: string[], env: Env): Promi
 		if (flight?.UpdatedDateTime) {
 			const match = flight.UpdatedDateTime.match(/\/Date\((\d+)\)\//)
 			if (match && match[1]) {
-				const date = new Date(Number(match[1]) + 3 * 60 * 60 * 1000) // Convert to IDT
-				const nowIdt = new Date(Date.now() + 3 * 60 * 60 * 1000)
-				const dayDiff = Math.round((date.getTime() - nowIdt.getTime()) / (1000 * 60 * 60 * 24))
+				const arrivalIdt = DateTime.fromMillis(Number(match[1])).setZone('Asia/Tel_Aviv')
+				const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
+				const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
 				dayLabel =
 					dayDiff === 0
 						? 'Today'
 						: dayDiff === 1
 							? 'Tomorrow'
-							: date.toLocaleDateString('en-US', { weekday: 'long' })
+							: arrivalIdt.toLocaleString({ weekday: 'long' })
 			}
 		}
 		message += `🛫 *${flightNum}*\n`
@@ -41,7 +42,7 @@ export function formatFlightSuggestions(flights: Flight[]): { text: string; repl
 			replyMarkup: null,
 		}
 	}
-	const nowIdt = new Date(Date.now() + 3 * 60 * 60 * 1000) // Current time in IDT
+	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
 	let message = '🎯 *Suggested Flights to Track:*\n\nThese flights arrive in 1+ hours:\n\n'
 	flights.forEach((flight, index) => {
 		const frLink = `https://www.flightradar24.com/data/flights/${flight.flightNumber.toLowerCase()}`
@@ -50,14 +51,14 @@ export function formatFlightSuggestions(flights: Flight[]): { text: string; repl
 		if (flight.UpdatedDateTime) {
 			const match = flight.UpdatedDateTime.match(/\/Date\((\d+)\)\//)
 			if (match && match[1]) {
-				const date = new Date(Number(match[1]) + 3 * 60 * 60 * 1000) // Convert to IDT
-				const dayDiff = Math.round((date.getTime() - nowIdt.getTime()) / (1000 * 60 * 60 * 24))
+				const arrivalIdt = DateTime.fromMillis(Number(match[1])).setZone('Asia/Tel_Aviv')
+				const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
 				dayLabel =
 					dayDiff === 0
 						? 'Today'
 						: dayDiff === 1
 							? 'Tomorrow'
-							: date.toLocaleDateString('en-US', { weekday: 'long' })
+							: arrivalIdt.toLocaleString({ weekday: 'long' })
 			}
 		}
 		message += `${index + 1}. 🛫 *${flight.flightNumber}*\n`

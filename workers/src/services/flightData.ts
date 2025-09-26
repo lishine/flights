@@ -1,4 +1,5 @@
 import { fetchVercel } from '../utils/validation'
+import { DateTime } from 'luxon'
 import type { Env } from '../index'
 import type { Flight } from '../types'
 
@@ -19,24 +20,28 @@ interface RawFlight {
 	CurrentCultureName: string
 }
 
-// Parse UpdatedDateTime (/Date(<timestamp>)/) as IDT timestamp
-function parseArrivalTime(dateTimeString: string): number {
+// Parse UpdatedDateTime (/Date(<timestamp>)/) as IDT DateTime
+function parseArrivalTime(dateTimeString: string): DateTime | null {
 	const match = dateTimeString.match(/\/Date\((\d+)\)\//)
 	if (!match || !match[1]) {
 		console.error(`Invalid UpdatedDateTime format: ${dateTimeString}`)
-		return 0 // Skip invalid timestamps
+		return null
 	}
 	const timestamp = Number(match[1])
-	const idtDate = new Date(timestamp)
-	console.log(`Parsed ${dateTimeString} -> IDT: ${idtDate.toLocaleString('en-US', { timeZone: 'Asia/Tel_Aviv' })}`)
-	return timestamp
+	const idtDt = DateTime.fromMillis(timestamp).setZone('Asia/Tel_Aviv')
+	if (!idtDt.isValid) {
+		console.error(`Invalid timestamp ${timestamp} from ${dateTimeString}: ${idtDt.invalidReason}`)
+		return null
+	}
+	console.log(`Parsed ${dateTimeString} -> IDT: ${idtDt.toLocaleString(DateTime.DATETIME_MED)}`)
+	return idtDt
 }
 
-// Get current UTC time
-function getCurrentUtcTime(): number {
-	const now = Date.now()
-	console.log(`Current UTC time: ${new Date(now).toUTCString()}`)
-	return now
+// Get current time in IDT
+function getCurrentIdtTime(): DateTime {
+	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
+	console.log(`Current IDT time: ${nowIdt.toLocaleString(DateTime.DATETIME_MED)}`)
+	return nowIdt
 }
 
 export async function getCurrentFlights(env: Env): Promise<Flight[]> {
@@ -57,29 +62,28 @@ export async function getCurrentFlightData(flightNumber: string, env: Env): Prom
 
 export async function suggestFlightsToTrack(env: Env): Promise<Flight[]> {
 	const currentFlights = await getCurrentFlights(env)
-	const nowUtc = getCurrentUtcTime()
-	const oneHourFromNowUtc = nowUtc + 60 * 60 * 1000
-	const nowIdt = new Date(nowUtc + 3 * 60 * 60 * 1000) // Convert to IDT
+	const nowIdt = getCurrentIdtTime()
+	const oneHourFromNowIdt = nowIdt.plus({ hours: 1 })
 	console.log(
-		`Tel Aviv now: ${nowIdt.toLocaleString('en-US', { timeZone: 'Asia/Tel_Aviv' })}, ` +
-			`One hour from now: ${new Date(oneHourFromNowUtc + 3 * 60 * 60 * 1000).toLocaleString('en-US', { timeZone: 'Asia/Tel_Aviv' })}`
+		`Tel Aviv now: ${nowIdt.toLocaleString(DateTime.DATETIME_MED)}, ` +
+			`One hour from now: ${oneHourFromNowIdt.toLocaleString(DateTime.DATETIME_MED)}`
 	)
 
 	const eligibleFlights = currentFlights.filter((flight) => {
-		const arrivalUtc = parseArrivalTime(flight.UpdatedDateTime)
-		if (arrivalUtc === 0) {
+		const arrivalIdt = parseArrivalTime(flight.UpdatedDateTime)
+		if (!arrivalIdt) {
 			console.log(`Skipping flight ${flight.flightNumber} due to invalid UpdatedDateTime`)
 			return false
 		}
-		const arrivalIdt = new Date(arrivalUtc + 3 * 60 * 60 * 1000) // Convert to IDT
-		const isFutureFlight = arrivalUtc >= oneHourFromNowUtc
-		const isSameOrFutureDay =
-			arrivalIdt.getFullYear() === nowIdt.getFullYear() &&
-			arrivalIdt.getMonth() === nowIdt.getMonth() &&
-			arrivalIdt.getDate() >= nowIdt.getDate()
+		const hoursUntilArrival = arrivalIdt.diff(nowIdt, 'hours').hours
+		const isFutureFlight = hoursUntilArrival >= 1
+		if (isFutureFlight) {
+			console.log('~~~', { arrivalIdt, nowIdt, flight })
+		}
+		const isSameOrFutureDay = arrivalIdt.toFormat('yyyy-MM-dd') >= nowIdt.toFormat('yyyy-MM-dd')
 		console.log(
-			`Flight ${flight.flightNumber}: arrival=${arrivalIdt.toLocaleString('en-US', { timeZone: 'Asia/Tel_Aviv' })}, ` +
-				`isFuture=${isFutureFlight}, isSameOrFutureDay=${isSameOrFutureDay}, status=${flight.status}, ` +
+			`Flight ${flight.flightNumber}: arrival=${arrivalIdt.toLocaleString(DateTime.DATETIME_MED)}, ` +
+				`hoursUntil=${hoursUntilArrival.toFixed(1)}, isFuture=${isFutureFlight}, isSameOrFutureDay=${isSameOrFutureDay}, status=${flight.status}, ` +
 				`actualArrival=${flight.actualArrival}`
 		)
 		return isFutureFlight && isSameOrFutureDay && flight.status !== 'LANDED' && flight.status !== 'CANCELED'
@@ -87,26 +91,24 @@ export async function suggestFlightsToTrack(env: Env): Promise<Flight[]> {
 
 	return eligibleFlights
 		.sort((a, b) => {
-			const timeA = parseArrivalTime(a.UpdatedDateTime)
-			const timeB = parseArrivalTime(b.UpdatedDateTime)
-			return timeA - timeB
+			const arrivalA = parseArrivalTime(a.UpdatedDateTime)
+			const arrivalB = parseArrivalTime(b.UpdatedDateTime)
+			return (arrivalA?.toMillis() ?? 0) - (arrivalB?.toMillis() ?? 0)
 		})
 		.slice(0, 5)
 }
 
 export async function cleanupCompletedFlights(currentFlights: Flight[], env: Env) {
-	const nowUtc = getCurrentUtcTime()
-	const cutoffTimeUtc = nowUtc - 2 * 60 * 60 * 1000 // 2 hours ago
-	console.log(
-		`Cleanup: cutoff=${new Date(cutoffTimeUtc + 3 * 60 * 60 * 1000).toLocaleString('en-US', { timeZone: 'Asia/Tel_Aviv' })}`
-	)
+	const nowIdt = getCurrentIdtTime()
+	const cutoffIdt = nowIdt.minus({ hours: 2 })
+	console.log(`Cleanup: cutoff=${cutoffIdt.toLocaleString(DateTime.DATETIME_MED)}`)
 
 	for (const flight of currentFlights) {
-		const arrivalUtc = parseArrivalTime(flight.UpdatedDateTime)
-		if (arrivalUtc === 0) continue
-		if (flight.status === 'LANDED' && arrivalUtc < cutoffTimeUtc) {
+		const arrivalIdt = parseArrivalTime(flight.UpdatedDateTime)
+		if (!arrivalIdt) continue
+		if (flight.status === 'LANDED' && arrivalIdt < cutoffIdt) {
 			console.log(
-				`Cleaning up landed flight: ${flight.flightNumber}, arrived at ${new Date(arrivalUtc + 3 * 60 * 60 * 1000).toLocaleString('en-US', { timeZone: 'Asia/Tel_Aviv' })}`
+				`Cleaning up landed flight: ${flight.flightNumber}, arrived at ${arrivalIdt.toLocaleString(DateTime.DATETIME_MED)}`
 			)
 			const trackingKey = `tracking:${flight.flightNumber}`
 			const trackingUsers = JSON.parse((await env.FLIGHT_DATA.get(trackingKey)) || '[]') as string[]
