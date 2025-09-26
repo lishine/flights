@@ -14,7 +14,10 @@ export async function formatTrackingList(userFlights: string[], env: Env): Promi
 		if (flight?.UpdatedDateTime) {
 			const match = flight.UpdatedDateTime.match(/\/Date\((\d+)\)\//)
 			if (match && match[1]) {
-				const arrivalIdt = DateTime.fromMillis(Number(match[1])).setZone('Asia/Tel_Aviv')
+				const localTimestamp = Number(match[1])
+				const IDT_OFFSET_MS = 3 * 60 * 60 * 1000 // Fixed for IDT DST
+				const utcTimestamp = localTimestamp - IDT_OFFSET_MS
+				const arrivalIdt = DateTime.fromMillis(utcTimestamp).setZone('Asia/Tel_Aviv')
 				const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
 				const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
 				dayLabel =
@@ -51,7 +54,10 @@ export function formatFlightSuggestions(flights: Flight[]): { text: string; repl
 		if (flight.UpdatedDateTime) {
 			const match = flight.UpdatedDateTime.match(/\/Date\((\d+)\)\//)
 			if (match && match[1]) {
-				const arrivalIdt = DateTime.fromMillis(Number(match[1])).setZone('Asia/Tel_Aviv')
+				const localTimestamp = Number(match[1])
+				const IDT_OFFSET_MS = 3 * 60 * 60 * 1000 // Fixed for IDT DST
+				const utcTimestamp = localTimestamp - IDT_OFFSET_MS
+				const arrivalIdt = DateTime.fromMillis(utcTimestamp).setZone('Asia/Tel_Aviv')
 				const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
 				dayLabel =
 					dayDiff === 0

@@ -13,10 +13,17 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 			lastUpdated: new Date().toISOString(),
 			source: 'vercel-api',
 		}
-		await env.FLIGHT_DATA.put('latest-arrivals', JSON.stringify(dataWithMeta), { expirationTtl: 120 }) // 2-minute TTL
+
+		// Store current flights as latest-arrivals (24h TTL)
+		await env.FLIGHT_DATA.put('latest-arrivals', JSON.stringify(dataWithMeta), { expirationTtl: 86400 })
 		await env.FLIGHT_DATA.put('update-counter', currentCount.toString())
+
+		// Send alerts by comparing with prev-arrivals
 		await sendFlightAlerts(currentFlights, env)
+
+		// Cleanup completed flights
 		await cleanupCompletedFlights(currentFlights, env)
+
 		return new Response('Cron job completed')
 	} catch (error) {
 		console.error('Cron job failed:', error)

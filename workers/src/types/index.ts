@@ -7,4 +7,6 @@ export interface Flight {
 	origin: string
 	ScheduledDateTime: string
 	UpdatedDateTime: string
+	updatedDate: string
+	updatedTime: string
 }

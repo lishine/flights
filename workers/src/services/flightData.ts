@@ -20,20 +20,22 @@ interface RawFlight {
 	CurrentCultureName: string
 }
 
-// Parse UpdatedDateTime (/Date(<timestamp>)/) as IDT DateTime
+// Parse UpdatedDateTime (/Date(<timestamp>)/) as IDT DateTime (local IDT epoch millis)
 function parseArrivalTime(dateTimeString: string): DateTime | null {
 	const match = dateTimeString.match(/\/Date\((\d+)\)\//)
 	if (!match || !match[1]) {
 		console.error(`Invalid UpdatedDateTime format: ${dateTimeString}`)
 		return null
 	}
-	const timestamp = Number(match[1])
-	const idtDt = DateTime.fromMillis(timestamp).setZone('Asia/Tel_Aviv')
+	const localTimestamp = Number(match[1])
+	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
+	const offsetMs = nowIdt.offset * 60 * 1000 // Dynamic IDT offset in ms
+	const utcTimestamp = localTimestamp - offsetMs
+	const idtDt = DateTime.fromMillis(utcTimestamp).setZone('Asia/Tel_Aviv')
 	if (!idtDt.isValid) {
-		console.error(`Invalid timestamp ${timestamp} from ${dateTimeString}: ${idtDt.invalidReason}`)
+		console.error(`Invalid timestamp ${localTimestamp} from ${dateTimeString}: ${idtDt.invalidReason}`)
 		return null
 	}
-	console.log(`Parsed ${dateTimeString} -> IDT: ${idtDt.toLocaleString(DateTime.DATETIME_MED)}`)
 	return idtDt
 }
 
@@ -50,8 +52,9 @@ export async function getCurrentFlights(env: Env): Promise<Flight[]> {
 		console.error('No cached flight data available in latest-arrivals')
 		throw new Error('Flight data unavailable')
 	}
+
 	const parsed = JSON.parse(cached)
-	console.log('Using cached flight data')
+	console.log('Using cached flight data from latest-arrivals')
 	return parsed.data || []
 }
 
@@ -63,11 +66,6 @@ export async function getCurrentFlightData(flightNumber: string, env: Env): Prom
 export async function suggestFlightsToTrack(env: Env): Promise<Flight[]> {
 	const currentFlights = await getCurrentFlights(env)
 	const nowIdt = getCurrentIdtTime()
-	const oneHourFromNowIdt = nowIdt.plus({ hours: 1 })
-	console.log(
-		`Tel Aviv now: ${nowIdt.toLocaleString(DateTime.DATETIME_MED)}, ` +
-			`One hour from now: ${oneHourFromNowIdt.toLocaleString(DateTime.DATETIME_MED)}`
-	)
 
 	const eligibleFlights = currentFlights.filter((flight) => {
 		const arrivalIdt = parseArrivalTime(flight.UpdatedDateTime)
@@ -77,15 +75,7 @@ export async function suggestFlightsToTrack(env: Env): Promise<Flight[]> {
 		}
 		const hoursUntilArrival = arrivalIdt.diff(nowIdt, 'hours').hours
 		const isFutureFlight = hoursUntilArrival >= 1
-		if (isFutureFlight) {
-			console.log('~~~', { arrivalIdt, nowIdt, flight })
-		}
 		const isSameOrFutureDay = arrivalIdt.toFormat('yyyy-MM-dd') >= nowIdt.toFormat('yyyy-MM-dd')
-		console.log(
-			`Flight ${flight.flightNumber}: arrival=${arrivalIdt.toLocaleString(DateTime.DATETIME_MED)}, ` +
-				`hoursUntil=${hoursUntilArrival.toFixed(1)}, isFuture=${isFutureFlight}, isSameOrFutureDay=${isSameOrFutureDay}, status=${flight.status}, ` +
-				`actualArrival=${flight.actualArrival}`
-		)
 		return isFutureFlight && isSameOrFutureDay && flight.status !== 'LANDED' && flight.status !== 'CANCELED'
 	})
 
@@ -136,5 +126,7 @@ export async function fetchLatestFlights(env: Env): Promise<Flight[]> {
 		origin: flight.City,
 		ScheduledDateTime: flight.ScheduledDateTime,
 		UpdatedDateTime: flight.UpdatedDateTime,
+		updatedDate: flight.UpdatedDate,
+		updatedTime: flight.UpdatedTime,
 	}))
 }

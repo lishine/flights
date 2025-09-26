@@ -49,9 +49,12 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 
 		if (data.startsWith('track_suggested:')) {
 			const flightCodes = data.split(':')[1].split(',')
+			console.log({ 'to track flightCodes': flightCodes })
 			const results = []
 			for (const code of flightCodes) {
+				console.log({ code: code })
 				if (isValidFlightCode(code)) {
+					console.log('isvalid', { code: code })
 					await addFlightTracking(chatId, code.toUpperCase().replace(' ', ''), env)
 					results.push(`✅ Now tracking ${code.toUpperCase()}`)
 				} else {
