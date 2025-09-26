@@ -1,7 +1,7 @@
 import { fetchVercel } from '../utils/validation'
 import { DateTime } from 'luxon'
 import type { Env } from '../index'
-import type { Flight } from '../types'
+import type { D1Flight, Flight } from '../types'
 
 interface RawFlight {
 	Airline: string
@@ -20,20 +20,14 @@ interface RawFlight {
 	CurrentCultureName: string
 }
 
-// Parse UpdatedDateTime (/Date(<timestamp>)/) as IDT DateTime (local IDT epoch millis)
-function parseArrivalTime(dateTimeString: string): DateTime | null {
-	const match = dateTimeString.match(/\/Date\((\d+)\)\//)
-	if (!match || !match[1]) {
-		console.error(`Invalid UpdatedDateTime format: ${dateTimeString}`)
+// Convert a timestamp (number) to an IDT DateTime object
+function timestampToIdtDateTime(timestamp: number | null): DateTime | null {
+	if (timestamp === null) {
 		return null
 	}
-	const localTimestamp = Number(match[1])
-	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
-	const offsetMs = nowIdt.offset * 60 * 1000 // Dynamic IDT offset in ms
-	const utcTimestamp = localTimestamp - offsetMs
-	const idtDt = DateTime.fromMillis(utcTimestamp).setZone('Asia/Tel_Aviv')
+	const idtDt = DateTime.fromMillis(timestamp).setZone('Asia/Tel_Aviv')
 	if (!idtDt.isValid) {
-		console.error(`Invalid timestamp ${localTimestamp} from ${dateTimeString}: ${idtDt.invalidReason}`)
+		console.error(`Invalid timestamp ${timestamp}: ${idtDt.invalidReason}`)
 		return null
 	}
 	return idtDt
@@ -46,31 +40,41 @@ function getCurrentIdtTime(): DateTime {
 	return nowIdt
 }
 
-export async function getCurrentFlights(env: Env): Promise<Flight[]> {
-	const cached = await env.FLIGHT_DATA.get('latest-arrivals')
-	if (!cached) {
-		console.error('No cached flight data available in latest-arrivals')
+// Parse RawFlight's /Date(<timestamp>)/ string to a number timestamp (epoch milliseconds)
+function parseRawFlightDateTime(dateTimeString: string): number | null {
+	const match = dateTimeString.match(/\/Date\((\d+)\)\//)
+	if (!match || !match[1]) {
+		console.error(`Invalid RawFlight DateTime format: ${dateTimeString}`)
+		return null
+	}
+	return Number(match[1])
+}
+
+export async function getCurrentFlights(env: Env): Promise<D1Flight[]> {
+	const { results } = await env.DB.prepare('SELECT * FROM flights ORDER BY actual_arrival_time DESC').all<D1Flight>()
+	if (!results || results.length === 0) {
+		console.error('No flight data available in D1')
 		throw new Error('Flight data unavailable')
 	}
-
-	const parsed = JSON.parse(cached)
-	console.log('Using cached flight data from latest-arrivals')
-	return parsed.data || []
+	console.log('Using D1 flight data')
+	return results
 }
 
-export async function getCurrentFlightData(flightNumber: string, env: Env): Promise<Flight | undefined> {
-	const flights = await getCurrentFlights(env)
-	return flights.find((f) => f.flightNumber === flightNumber)
+export async function getCurrentFlightData(flightNumber: string, env: Env): Promise<D1Flight | undefined> {
+	const { results } = await env.DB.prepare('SELECT * FROM flights WHERE flight_number = ?')
+		.bind(flightNumber)
+		.all<D1Flight>()
+	return results?.[0]
 }
 
-export async function suggestFlightsToTrack(env: Env): Promise<Flight[]> {
+export async function suggestFlightsToTrack(env: Env): Promise<D1Flight[]> {
 	const currentFlights = await getCurrentFlights(env)
 	const nowIdt = getCurrentIdtTime()
 
 	const eligibleFlights = currentFlights.filter((flight) => {
-		const arrivalIdt = parseArrivalTime(flight.UpdatedDateTime)
+		const arrivalIdt = timestampToIdtDateTime(flight.actual_arrival_time)
 		if (!arrivalIdt) {
-			console.log(`Skipping flight ${flight.flightNumber} due to invalid UpdatedDateTime`)
+			console.log(`Skipping flight ${flight.flight_number} due to invalid actual_arrival_time`)
 			return false
 		}
 		const hoursUntilArrival = arrivalIdt.diff(nowIdt, 'hours').hours
@@ -81,52 +85,153 @@ export async function suggestFlightsToTrack(env: Env): Promise<Flight[]> {
 
 	return eligibleFlights
 		.sort((a, b) => {
-			const arrivalA = parseArrivalTime(a.UpdatedDateTime)
-			const arrivalB = parseArrivalTime(b.UpdatedDateTime)
+			const arrivalA = timestampToIdtDateTime(a.actual_arrival_time)
+			const arrivalB = timestampToIdtDateTime(b.actual_arrival_time)
 			return (arrivalA?.toMillis() ?? 0) - (arrivalB?.toMillis() ?? 0)
 		})
 		.slice(0, 5)
 }
 
-export async function cleanupCompletedFlights(currentFlights: Flight[], env: Env) {
+export async function cleanupCompletedFlights(currentFlights: D1Flight[], env: Env) {
 	const nowIdt = getCurrentIdtTime()
 	const cutoffIdt = nowIdt.minus({ hours: 2 })
 	console.log(`Cleanup: cutoff=${cutoffIdt.toLocaleString(DateTime.DATETIME_MED)}`)
 
 	for (const flight of currentFlights) {
-		const arrivalIdt = parseArrivalTime(flight.UpdatedDateTime)
+		const arrivalIdt = timestampToIdtDateTime(flight.actual_arrival_time)
 		if (!arrivalIdt) continue
 		if (flight.status === 'LANDED' && arrivalIdt < cutoffIdt) {
 			console.log(
-				`Cleaning up landed flight: ${flight.flightNumber}, arrived at ${arrivalIdt.toLocaleString(DateTime.DATETIME_MED)}`
+				`Cleaning up landed flight: ${flight.flight_number}, arrived at ${arrivalIdt.toLocaleString(DateTime.DATETIME_MED)}`
 			)
-			const trackingKey = `tracking:${flight.flightNumber}`
-			const trackingUsers = JSON.parse((await env.FLIGHT_DATA.get(trackingKey)) || '[]') as string[]
-			await env.FLIGHT_DATA.delete(trackingKey)
-			for (const userId of trackingUsers) {
-				const userKey = `user_tracks:${userId}`
-				const userFlights = JSON.parse((await env.FLIGHT_DATA.get(userKey)) || '[]') as string[]
-				const updatedFlights = userFlights.filter((f) => f !== flight.flightNumber)
-				await env.FLIGHT_DATA.put(userKey, JSON.stringify(updatedFlights), { expirationTtl: 86400 * 7 })
-			}
+			// Delete from D1
+			await env.DB.prepare('DELETE FROM flights WHERE flight_number = ?').bind(flight.flight_number).run()
+			// Also clean up tracking data (assuming tracking data is still in KV for now, or will be migrated later)
+			// Clean up completed flights from subscriptions table
+			await env.DB.prepare(
+				"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_number = ? AND auto_cleanup_at IS NULL"
+			)
+				.bind(flight.flight_number)
+				.run()
 		}
 	}
 }
 
-export async function fetchLatestFlights(env: Env): Promise<Flight[]> {
+// Export detectChanges function for use in cron.ts
+export function detectChanges(prevFlight: D1Flight, currentFlight: D1Flight): string[] {
+	const changes: string[] = []
+	if (prevFlight.status !== currentFlight.status) {
+		changes.push(`📍 Status: ${currentFlight.status}`)
+	}
+	if (prevFlight.actual_arrival_time !== currentFlight.actual_arrival_time) {
+		const prevTime = prevFlight.actual_arrival_time
+			? new Date(prevFlight.actual_arrival_time).toLocaleTimeString('en-US', {
+					hour: '2-digit',
+					minute: '2-digit',
+				})
+			: 'TBA'
+		const currentTime = currentFlight.actual_arrival_time
+			? new Date(currentFlight.actual_arrival_time).toLocaleTimeString('en-US', {
+					hour: '2-digit',
+					minute: '2-digit',
+				})
+			: 'TBA'
+		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
+	}
+	if (prevFlight.city !== currentFlight.city) {
+		changes.push(`🏙️ City: ${currentFlight.city || 'Unknown'}`)
+	}
+	if (prevFlight.airline !== currentFlight.airline) {
+		changes.push(`✈️ Airline: ${currentFlight.airline || 'Unknown'}`)
+	}
+	return changes
+}
+
+export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 	const response = await fetchVercel('https://flights-taupe.vercel.app/api/tlv-arrivals')
+	console.log('01')
 	const rawData = (await response.json()) as { Flights: RawFlight[] }
 	console.log('Raw API data sample:', JSON.stringify(rawData.Flights.slice(0, 2), null, 2))
-	return rawData.Flights.map((flight) => ({
-		flightNumber: flight.Flight.replace(' ', ''),
-		status: flight.Status,
-		scheduledArrival: flight.ScheduledTime,
-		actualArrival: flight.UpdatedTime,
-		gate: 'TBA',
-		origin: flight.City,
-		ScheduledDateTime: flight.ScheduledDateTime,
-		UpdatedDateTime: flight.UpdatedDateTime,
-		updatedDate: flight.UpdatedDate,
-		updatedTime: flight.UpdatedTime,
-	}))
+
+	// Initialize or update status table with metadata
+	await env.DB.prepare(
+		`
+		INSERT INTO status (key, value)
+		VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
+	`
+	)
+		.bind('lastUpdated', Date.now().toString())
+		.run()
+
+	await env.DB.prepare(
+		`
+		INSERT INTO status (key, value)
+		VALUES (?, '1')
+		ON CONFLICT(key) DO UPDATE SET value = CAST((CAST(value AS INTEGER) + 1) AS TEXT)
+	`
+	)
+		.bind('updateCount')
+		.run()
+
+	await env.DB.prepare(
+		`
+		INSERT INTO status (key, value)
+		VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
+	`
+	)
+		.bind('dataLength', rawData.Flights.length.toString())
+		.run()
+
+	const newFlights: D1Flight[] = rawData.Flights.map((flight) => {
+		const scheduledArrivalTime = parseRawFlightDateTime(flight.ScheduledDateTime)
+		const actualArrivalTime = parseRawFlightDateTime(flight.UpdatedDateTime)
+
+		return {
+			id: crypto.randomUUID(),
+			flight_number: flight.Flight.replace(' ', ''),
+			status: flight.Status,
+			scheduled_departure_time: null, // RawFlight does not provide this
+			actual_departure_time: null, // RawFlight does not provide this
+			scheduled_arrival_time: scheduledArrivalTime,
+			actual_arrival_time: actualArrivalTime,
+			city: flight.City,
+			airline: flight.Airline,
+			created_at: Date.now(),
+			updated_at: Date.now(),
+		}
+	})
+	console.log('02')
+
+	const statements = newFlights.map((flight) =>
+		env.DB.prepare(
+			`INSERT INTO flights (id, flight_number, status, scheduled_departure_time, actual_departure_time, scheduled_arrival_time, actual_arrival_time, city, airline, created_at, updated_at)
+			          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			          ON CONFLICT(flight_number) DO UPDATE SET
+			          status = EXCLUDED.status,
+			          scheduled_departure_time = EXCLUDED.scheduled_departure_time,
+			          actual_departure_time = EXCLUDED.actual_departure_time,
+			          scheduled_arrival_time = EXCLUDED.scheduled_arrival_time,
+			          actual_arrival_time = EXCLUDED.actual_arrival_time,
+			          city = EXCLUDED.city,
+			          airline = EXCLUDED.airline,
+			          updated_at = EXCLUDED.updated_at;`
+		).bind(
+			flight.id,
+			flight.flight_number,
+			flight.status,
+			flight.scheduled_departure_time,
+			flight.actual_departure_time,
+			flight.scheduled_arrival_time,
+			flight.actual_arrival_time,
+			flight.city,
+			flight.airline,
+			flight.created_at,
+			flight.updated_at
+		)
+	)
+	await env.DB.batch(statements)
+
+	return newFlights
 }

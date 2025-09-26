@@ -1,44 +1,36 @@
 import { DateTime } from 'luxon'
 import { getCurrentFlightData } from '../services/flightData'
 import type { Env } from '../index'
-import type { Flight } from '../types'
+import type { D1Flight } from '../types'
 
 export async function formatTrackingList(userFlights: string[], env: Env): Promise<string> {
 	if (userFlights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
 	let message = '✈️ *Your Tracked Flights:*\n\n'
 	for (const flightNum of userFlights) {
 		const flight = await getCurrentFlightData(flightNum, env)
-		const frLink = `https://www.flightradar24.com/data/flights/${flightNum.toLowerCase()}`
-		let formattedTime = flight?.actualArrival || 'TBA'
+		let formattedTime = 'TBA'
 		let dayLabel = ''
-		if (flight?.UpdatedDateTime) {
-			const match = flight.UpdatedDateTime.match(/\/Date\((\d+)\)\//)
-			if (match && match[1]) {
-				const localTimestamp = Number(match[1])
-				const IDT_OFFSET_MS = 3 * 60 * 60 * 1000 // Fixed for IDT DST
-				const utcTimestamp = localTimestamp - IDT_OFFSET_MS
-				const arrivalIdt = DateTime.fromMillis(utcTimestamp).setZone('Asia/Tel_Aviv')
-				const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
-				const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
-				dayLabel =
-					dayDiff === 0
-						? 'Today'
-						: dayDiff === 1
-							? 'Tomorrow'
-							: arrivalIdt.toLocaleString({ weekday: 'long' })
-			}
+
+		if (flight?.actual_arrival_time) {
+			const arrivalIdt = DateTime.fromMillis(flight.actual_arrival_time).setZone('Asia/Tel_Aviv')
+			const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
+			const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
+
+			formattedTime = arrivalIdt.toLocaleString(DateTime.TIME_24_SIMPLE)
+			dayLabel =
+				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
 		}
+
 		message += `🛫 *${flightNum}*\n`
-		message += `📍 ${flight?.status || 'Unknown'}\n`
-		message += `🕒 ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n`
-		message += `🚪 Gate ${flight?.gate || 'TBA'}\n`
-		message += `📍 From ${flight?.origin || 'Unknown'}\n`
-		message += `📊 [Track Live](${frLink})\n\n`
+		message += `📍 Status: ${flight?.status || 'Unknown'}\n`
+		message += `🏙️ City: ${flight?.city || 'Unknown'}\n`
+		message += `✈️ Airline: ${flight?.airline || 'Unknown'}\n`
+		message += `🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n`
 	}
 	return message
 }
 
-export function formatFlightSuggestions(flights: Flight[]): { text: string; replyMarkup: any } {
+export function formatFlightSuggestions(flights: D1Flight[]): { text: string; replyMarkup: any } {
 	if (flights.length === 0) {
 		return {
 			text: 'No flights available for tracking right now (need 1+ hour until arrival).',
@@ -48,31 +40,24 @@ export function formatFlightSuggestions(flights: Flight[]): { text: string; repl
 	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
 	let message = '🎯 *Suggested Flights to Track:*\n\nThese flights arrive in 1+ hours:\n\n'
 	flights.forEach((flight, index) => {
-		const frLink = `https://www.flightradar24.com/data/flights/${flight.flightNumber.toLowerCase()}`
-		let formattedTime = flight.actualArrival || 'TBA'
+		let formattedTime = 'TBA'
 		let dayLabel = ''
-		if (flight.UpdatedDateTime) {
-			const match = flight.UpdatedDateTime.match(/\/Date\((\d+)\)\//)
-			if (match && match[1]) {
-				const localTimestamp = Number(match[1])
-				const IDT_OFFSET_MS = 3 * 60 * 60 * 1000 // Fixed for IDT DST
-				const utcTimestamp = localTimestamp - IDT_OFFSET_MS
-				const arrivalIdt = DateTime.fromMillis(utcTimestamp).setZone('Asia/Tel_Aviv')
-				const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
-				dayLabel =
-					dayDiff === 0
-						? 'Today'
-						: dayDiff === 1
-							? 'Tomorrow'
-							: arrivalIdt.toLocaleString({ weekday: 'long' })
-			}
+
+		if (flight.actual_arrival_time) {
+			const arrivalIdt = DateTime.fromMillis(flight.actual_arrival_time).setZone('Asia/Tel_Aviv')
+			const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
+
+			formattedTime = arrivalIdt.toLocaleString(DateTime.TIME_24_SIMPLE)
+			dayLabel =
+				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
 		}
-		message += `${index + 1}. 🛫 *${flight.flightNumber}*\n`
-		message += `   📍 From ${flight.origin || 'Unknown'}\n`
-		message += `   🕒 ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n`
-		message += `   📊 [Track Live](${frLink})\n\n`
+
+		message += `${index + 1}. 🛫 *${flight.flight_number}*\n`
+		message += `   🏙️ City: ${flight.city || 'Unknown'}\n`
+		message += `   ✈️ Airline: ${flight.airline || 'Unknown'}\n`
+		message += `   🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n`
 	})
-	message += `Use: \`/track ${flights.map((f) => f.flightNumber).join(' ')}\`\n`
+	message += `Use: \`/track ${flights.map((f) => f.flight_number).join(' ')}\`\n`
 	message += `Or track individually: \`/track LY086\``
 	return {
 		text: message,
@@ -81,7 +66,7 @@ export function formatFlightSuggestions(flights: Flight[]): { text: string; repl
 				[
 					{
 						text: '✈️ Track All Suggested',
-						callback_data: `track_suggested:${flights.map((f) => f.flightNumber).join(',')}`,
+						callback_data: `track_suggested:${flights.map((f) => f.flight_number).join(',')}`,
 					},
 				],
 			],

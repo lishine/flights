@@ -1,63 +1,38 @@
 import type { Env } from '../index'
 
-export async function addFlightTracking(userId: number, flightCode: string, env: Env) {
-	const trackingKey = `tracking:${flightCode}`
-	let trackingUsers = JSON.parse((await env.FLIGHT_DATA.get(trackingKey)) || '[]') as string[]
-	if (!trackingUsers.includes(String(userId))) {
-		trackingUsers.push(String(userId))
-		await env.FLIGHT_DATA.put(trackingKey, JSON.stringify(trackingUsers), { expirationTtl: 86400 * 7 })
-	}
+interface Subscription {
+	telegram_id: string
+	flight_number: string
+	created_at: string
+	auto_cleanup_at: string | null
+}
 
-	const userKey = `user_tracks:${userId}`
-	let userFlights = JSON.parse((await env.FLIGHT_DATA.get(userKey)) || '[]') as string[]
-	if (!userFlights.includes(flightCode)) {
-		userFlights.push(flightCode)
-		await env.FLIGHT_DATA.put(userKey, JSON.stringify(userFlights), { expirationTtl: 86400 * 7 })
-	}
+export async function addFlightTracking(userId: number, flightCode: string, env: Env): Promise<void> {
+	await env.DB.prepare('INSERT OR IGNORE INTO subscriptions (telegram_id, flight_number) VALUES (?, ?)')
+		.bind(String(userId), flightCode)
+		.run()
 }
 
 export async function getUserTrackedFlights(userId: number, env: Env): Promise<string[]> {
-	const userFlights = await env.FLIGHT_DATA.get(`user_tracks:${userId}`)
-	return userFlights ? JSON.parse(userFlights) : []
+	const { results } = await env.DB.prepare(
+		'SELECT flight_number FROM subscriptions WHERE telegram_id = ? AND auto_cleanup_at IS NULL'
+	)
+		.bind(String(userId))
+		.all<Pick<Subscription, 'flight_number'>>()
+	return results.map((row) => row.flight_number)
 }
 
-export async function removeFlightTracking(userId: number, flightCode: string, env: Env) {
-	// Remove user from flight's tracking list
-	const trackingKey = `tracking:${flightCode}`
-	const trackingUsers = JSON.parse((await env.FLIGHT_DATA.get(trackingKey)) || '[]') as string[]
-	const updatedTrackingUsers = trackingUsers.filter(id => id !== String(userId))
-	
-	if (updatedTrackingUsers.length > 0) {
-		await env.FLIGHT_DATA.put(trackingKey, JSON.stringify(updatedTrackingUsers), { expirationTtl: 86400 * 7 })
-	} else {
-		await env.FLIGHT_DATA.delete(trackingKey)
-	}
-
-	// Remove flight from user's tracking list
-	const userKey = `user_tracks:${userId}`
-	const userFlights = JSON.parse((await env.FLIGHT_DATA.get(userKey)) || '[]') as string[]
-	const updatedUserFlights = userFlights.filter(f => f !== flightCode)
-	
-	if (updatedUserFlights.length > 0) {
-		await env.FLIGHT_DATA.put(userKey, JSON.stringify(updatedUserFlights), { expirationTtl: 86400 * 7 })
-	} else {
-		await env.FLIGHT_DATA.delete(userKey)
-	}
+export async function removeFlightTracking(userId: number, flightCode: string, env: Env): Promise<void> {
+	await env.DB.prepare('DELETE FROM subscriptions WHERE telegram_id = ? AND flight_number = ?')
+		.bind(String(userId), flightCode)
+		.run()
 }
 
-export async function cleanupStaleTrackingData(userId: string, flightNumber: string, env: Env) {
-	console.log(`Cleaning up stale tracking data: user ${userId}, flight ${flightNumber}`)
-	
-	// Remove user from flight's tracking list
-	const trackingKey = `tracking:${flightNumber}`
-	const trackingUsers = JSON.parse((await env.FLIGHT_DATA.get(trackingKey)) || '[]') as string[]
-	const updatedTrackingUsers = trackingUsers.filter(id => id !== userId)
-	
-	if (updatedTrackingUsers.length > 0) {
-		await env.FLIGHT_DATA.put(trackingKey, JSON.stringify(updatedTrackingUsers), { expirationTtl: 86400 * 7 })
-	} else {
-		await env.FLIGHT_DATA.delete(trackingKey)
-	}
-	
-	console.log(`Removed user ${userId} from tracking:${flightNumber}`)
+export async function cleanupStaleTrackingData(flightNumber: string, env: Env): Promise<void> {
+	// Schedule cleanup in D1
+	await env.DB.prepare(
+		"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_number = ? AND auto_cleanup_at IS NULL"
+	)
+		.bind(flightNumber)
+		.run()
 }

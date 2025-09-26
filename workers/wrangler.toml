@@ -3,6 +3,11 @@ main = "dist/worker.js"
 compatibility_date = "2025-09-24"
 observability = { enabled = true }
 triggers = { crons = ["*/2 * * * *"] }
-[[kv_namespaces]]
-binding = "FLIGHT_DATA"
-id = "154a282737544f8792497759d05f0771"
+# [[kv_namespaces]]
+# binding = "FLIGHT_DATA"
+# id = "154a282737544f8792497759d05f0771"
+
+[[d1_databases]]
+binding = "DB" # D1 database binding name
+database_name = "flights-db"
+database_id = "7a1b90eb-ca49-4317-a671-00a75ca77131" # Replace with your D1 database ID

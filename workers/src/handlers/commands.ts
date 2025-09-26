@@ -82,31 +82,39 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 		let responseText = ''
 		let replyMarkup = null
 		if (data === 'get_flights') {
-			const flightData = await env.FLIGHT_DATA.get('latest-arrivals')
-			if (flightData) {
-				const parsed = JSON.parse(flightData)
-				const lastUpdate = new Date(parsed.lastUpdated).toLocaleString()
+			const [lastUpdated, updateCount, dataLength] = await Promise.all([
+				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
+				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
+				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('dataLength').first<{ value: string }>(),
+			])
+
+			if (lastUpdated?.value) {
+				const lastUpdate = new Date(parseInt(lastUpdated.value)).toLocaleString()
 				responseText =
 					`✈️ *Flight Data Refreshed*\n\n` +
 					`📅 Updated: ${lastUpdate}\n` +
-					`🔢 Fetches: ${parsed.updateCount || 'N/A'}\n` +
-					`📊 Flights: ${parsed.data?.length || 'N/A'}\n\n` +
+					`🔢 Fetches: ${updateCount?.value || 'N/A'}\n` +
+					`📊 Flights: ${dataLength?.value || 'N/A'}\n\n` +
 					`_Data refreshes every 2 minutes_`
 			} else {
 				responseText = '❌ No flight data available'
 			}
 			replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Again', callback_data: 'get_flights' }]] }
 		} else if (data === 'get_status') {
-			const flightData = await env.FLIGHT_DATA.get('latest-arrivals')
-			if (flightData) {
-				const parsed = JSON.parse(flightData)
-				const timeDiff = Date.now() - parsed.timestamp
+			const [lastUpdated, updateCount] = await Promise.all([
+				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
+				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
+			])
+
+			if (lastUpdated?.value) {
+				const timestamp = parseInt(lastUpdated.value)
+				const timeDiff = Date.now() - timestamp
 				const minutesAgo = Math.floor(timeDiff / 60000)
 				responseText =
 					`📊 *System Status*\n\n` +
 					`✅ Online\n` +
 					`⏰ ${minutesAgo}m ago\n` +
-					`🔢 ${parsed.updateCount} fetches`
+					`🔢 ${updateCount?.value || 0} fetches`
 			} else {
 				responseText = '🔶 System starting up'
 			}
@@ -214,17 +222,21 @@ async function handleTestTracking(chatId: number, env: Env) {
 }
 
 async function handleFlights(chatId: number, env: Env) {
-	const flightData = await env.FLIGHT_DATA.get('latest-arrivals')
+	const [lastUpdated, updateCount, dataLength] = await Promise.all([
+		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
+		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
+		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('dataLength').first<{ value: string }>(),
+	])
+
 	let responseText
 	let replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_flights' }]] }
-	if (flightData) {
-		const parsed = JSON.parse(flightData)
-		const lastUpdate = new Date(parsed.lastUpdated).toLocaleString()
+	if (lastUpdated?.value) {
+		const lastUpdate = new Date(parseInt(lastUpdated.value)).toLocaleString()
 		responseText =
 			`✈️ *Latest Flight Data*\n\n` +
 			`📅 Updated: ${lastUpdate}\n` +
-			`🔢 Total fetches: ${parsed.updateCount || 'N/A'}\n` +
-			`📊 Flights count: ${parsed.data?.length || 'N/A'}\n\n` +
+			`🔢 Total fetches: ${updateCount?.value || 'N/A'}\n` +
+			`📊 Flights count: ${dataLength?.value || 'N/A'}\n\n` +
 			`_Data refreshes every 2 minutes_`
 	} else {
 		responseText = '❌ No flight data available yet\n\n_The system might still be starting up_'
@@ -233,17 +245,22 @@ async function handleFlights(chatId: number, env: Env) {
 }
 
 async function handleStatus(chatId: number, env: Env) {
-	const flightData = await env.FLIGHT_DATA.get('latest-arrivals')
-	const errorData = await env.FLIGHT_DATA.get('last-error')
+	const [lastUpdated, updateCount, errorResult] = await Promise.all([
+		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
+		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
+		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('last-error').first<{ value: string }>(),
+	])
+
+	const errorData = errorResult?.value
 	let responseText = '📊 *System Status*\n\n'
-	if (flightData) {
-		const parsed = JSON.parse(flightData)
-		const timeDiff = Date.now() - parsed.timestamp
+	if (lastUpdated?.value) {
+		const timestamp = parseInt(lastUpdated.value)
+		const timeDiff = Date.now() - timestamp
 		const minutesAgo = Math.floor(timeDiff / 60000)
 		responseText +=
 			`✅ System: Online\n` +
 			`⏰ Last update: ${minutesAgo} minutes ago\n` +
-			`🔢 Total fetches: ${parsed.updateCount}`
+			`🔢 Total fetches: ${updateCount?.value || 0}`
 	} else {
 		responseText += '🔶 System: Starting up'
 	}
