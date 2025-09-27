@@ -43,10 +43,10 @@ export async function sendFlightAlerts(
 }
 
 async function sendAlert(userId: number, flight: D1Flight, changes: string[], env: Env) {
- 	const message = `🚨 *Flight Update: ${flight.flight_number}*\n\n${changes.join('\n\n')}\n\n🏙️ City: ${
- 		flight.city || 'Unknown'
- 	}\n\n✈️ Airline: ${flight.airline || 'Unknown'}\n`
- 	await sendTelegramMessage(userId, message, env, false)
+	const message = `🚨 *Flight Update: ${flight.flight_number}*\n\n${changes.join('\n')}\n\nCity: ${
+		flight.city || 'Unknown'
+	}\nAirline: ${flight.airline || 'Unknown'}`
+	await sendTelegramMessage(userId, message, env, false)
 
 	// Check if flight is landed or landing and run cleanup
 	const status = flight.status?.toLowerCase() || ''

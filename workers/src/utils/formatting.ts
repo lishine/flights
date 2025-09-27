@@ -21,13 +21,27 @@ export async function formatTrackingList(userFlights: string[], env: Env): Promi
 				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
 		}
 
-		message += `🛫 *${flightNum}*\n\n`
-			message += `📍 Status: ${flight?.status || 'Unknown'}\n\n`
-			message += `🏙️ City: ${flight?.city || 'Unknown'}\n\n`
-			message += `✈️ Airline: ${flight?.airline || 'Unknown'}\n\n`
-			message += `🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
+		message += `🛩️ *${flightNum}*\n`
+		message += `Status: ${flight?.status || 'Unknown'}\n`
+		message += `City: ${flight?.city || 'Unknown'}\n`
+		message += `Airline: ${flight?.airline || 'Unknown'}\n`
+		message += `⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
 	}
 	return message
+}
+
+// Helper function to escape Markdown special characters
+function escapeMarkdown(text: string): string {
+	if (!text) return ''
+	return text
+		.replace(/\*/g, '\\*') // Escape asterisks
+		.replace(/_/g, '\\_') // Escape underscores
+		.replace(/\[/g, '\\[') // Escape opening brackets
+		.replace(/\]/g, '\\]') // Escape closing brackets
+		.replace(/\(/g, '\\(') // Escape opening parentheses
+		.replace(/\)/g, '\\)') // Escape closing parentheses
+		.replace(/`/g, '\\`') // Escape backticks
+		.replace(/~/g, '\\~') // Escape tildes
 }
 
 export function formatFlightSuggestions(flights: D1Flight[]): { text: string; replyMarkup: any } {
@@ -52,12 +66,12 @@ export function formatFlightSuggestions(flights: D1Flight[]): { text: string; re
 				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
 		}
 
-		message += `${index + 1}. 🛫 *${flight.flight_number}*\n\n`
-			message += `   🏙️ City: ${flight.city || 'Unknown'}\n\n`
-			message += `   ✈️ Airline: ${flight.airline || 'Unknown'}\n\n`
-			message += `   🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
+		message += `${index + 1}. 🛩️ *${escapeMarkdown(flight.flight_number)}*\n`
+		message += `   City: ${escapeMarkdown(flight.city || 'Unknown')}\n`
+		message += `   Airline: ${escapeMarkdown(flight.airline || 'Unknown')}\n`
+		message += `   ⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
 	})
-	message += `Use: \`/track ${flights.map((f) => f.flight_number).join(' ')}\`\n`
+	message += `Use: \`/track ${flights.map((f) => escapeMarkdown(f.flight_number)).join(' ')}\`\n`
 	message += `Or track individually: \`/track LY086\``
 	return {
 		text: message,

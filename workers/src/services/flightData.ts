@@ -29,37 +29,12 @@ function parseRawFlightDateTime(dateTimeString: string): DateTime | null {
 	}
 
 	const localTimestamp = Number(match[1])
-	console.log(`Parsing flight timestamp: ${dateTimeString} -> ${localTimestamp}`)
-
-	// Try different timezone interpretations to find the correct one
-	const utcDt = DateTime.fromMillis(localTimestamp)
-	const idtDt = DateTime.fromMillis(localTimestamp).setZone('Asia/Tel_Aviv')
-	const apiAsUtcPlus3Dt = DateTime.fromMillis(localTimestamp - 3 * 60 * 60 * 1000).setZone('Asia/Tel_Aviv')
-
-	console.log(`Raw timestamp: ${localTimestamp}`)
-	console.log(`As UTC: ${utcDt.toISO()}`)
-	console.log(`As IDT: ${idtDt.toISO()}`)
-	console.log(`As UTC+3: ${apiAsUtcPlus3Dt.toISO()}`)
-
-	// The API might be providing timestamps in UTC+3 (IDT) format
-	// If so, we need to treat them as UTC+3 time, not convert from UTC
 	const idtDtFinal = DateTime.fromMillis(localTimestamp - 3 * 60 * 60 * 1000).setZone('Asia/Tel_Aviv')
 
 	if (!idtDtFinal.isValid) {
 		console.error(`Invalid timestamp ${localTimestamp}: ${idtDtFinal.invalidReason}`)
 		return null
 	}
-
-	console.log(
-		`Final parsed IDT time: ${idtDtFinal.toISO()} (local: ${idtDtFinal.toLocaleString(DateTime.DATETIME_MED)})`
-	)
-
-	// Verify this makes sense compared to current time
-	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
-	const hoursDiff = idtDtFinal.diff(nowIdt, 'hours').hours
-	console.log(
-		`Flight time is ${hoursDiff.toFixed(1)} hours from now (current: ${nowIdt.toLocaleString(DateTime.DATETIME_MED)})`
-	)
 
 	return idtDtFinal
 }
@@ -102,6 +77,7 @@ export async function getCurrentFlightData(flightNumber: string, env: Env): Prom
 }
 
 export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D1Flight[]> {
+	console.log('suggestFlightsToTrack')
 	const [currentFlights, trackedFlights] = await Promise.all([
 		getCurrentFlights(env),
 		env.DB.prepare('SELECT flight_number FROM subscriptions WHERE telegram_id = ? AND auto_cleanup_at IS NULL')
@@ -111,6 +87,7 @@ export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D
 
 	const nowIdt = getCurrentIdtTime()
 	const trackedFlightNumbers = new Set((trackedFlights.results || []).map((f) => f.flight_number))
+	console.log({ trackedFlights: trackedFlights.results, trackedFlightNumbers: trackedFlightNumbers.size })
 
 	const eligibleFlights = currentFlights.filter((flight) => {
 		// Skip if already tracked
@@ -127,6 +104,7 @@ export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D
 		const isSameOrFutureDay = arrivalIdt.toFormat('yyyy-MM-dd') >= nowIdt.toFormat('yyyy-MM-dd')
 		return isFutureFlight && isSameOrFutureDay && flight.status !== 'LANDED' && flight.status !== 'CANCELED'
 	})
+	console.log({ 'eligibleFlights.length': eligibleFlights.length })
 
 	return eligibleFlights
 		.sort((a, b) => {

@@ -7,17 +7,38 @@ export async function sendTelegramMessage(
 	disableNotification: boolean = false,
 	replyMarkup?: any
 ) {
-	const payload: any = {
-		chat_id: chatId,
-		text,
-		parse_mode: 'Markdown',
-		disable_notification: disableNotification,
-		disable_web_page_preview: false,
+	try {
+		const payload: any = {
+			chat_id: chatId,
+			text,
+			parse_mode: 'Markdown',
+			disable_notification: disableNotification,
+			disable_web_page_preview: false,
+		}
+		if (replyMarkup) payload.reply_markup = replyMarkup
+
+		console.log(`Sending Telegram message to ${chatId}, length: ${text.length}`)
+
+		const response = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload),
+		})
+
+		const result = (await response.json()) as { ok: boolean; description?: string }
+
+		if (!response.ok) {
+			console.error(`Telegram API HTTP error: ${response.status} ${response.statusText}`, result)
+			throw new Error(`Telegram API HTTP error: ${response.status} - ${response.statusText}`)
+		}
+
+		if (!result.ok) {
+			console.error('Telegram API returned error:', result)
+			throw new Error(`Telegram API error: ${result.description || 'Unknown error'}`)
+		}
+	} catch (error) {
+		console.error('Failed to send Telegram message:', error)
+		// Don't throw the error - let other commands continue to work
+		// This prevents the entire command handler from failing
 	}
-	if (replyMarkup) payload.reply_markup = replyMarkup
-	await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(payload),
-	})
 }
