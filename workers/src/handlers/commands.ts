@@ -1,6 +1,6 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, getUserTrackedFlights, clearUserTracking } from '../services/tracking'
-import { getCurrentFlights, suggestFlightsToTrack } from '../services/flightData'
+import { getCurrentFlights, suggestFlightsToTrack, getFlightIdByNumber } from '../services/flightData'
 import { formatTrackingList, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { VERSION } from '../utils/constants'
@@ -56,8 +56,13 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 				console.log({ code: code })
 				if (isValidFlightCode(code)) {
 					console.log('isvalid', { code: code })
-					await addFlightTracking(chatId, code.toUpperCase().replace(' ', ''), env)
-					results.push(`✅ Now tracking ${code.toUpperCase()}`)
+					const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), env)
+					if (flightId) {
+						await addFlightTracking(chatId, flightId, env)
+						results.push(`✓ Now tracking ${code.toUpperCase()}`)
+					} else {
+						results.push(`❌ Flight not found: ${code}`)
+					}
 				} else {
 					results.push(`❌ Invalid flight code: ${code}`)
 				}
@@ -206,8 +211,13 @@ async function handleTrack(chatId: number, text: string, env: Env) {
 	const results = []
 	for (const code of flightCodes) {
 		if (isValidFlightCode(code)) {
-			await addFlightTracking(chatId, code.toUpperCase().replace(' ', ''), env)
-			results.push(`✓ Now tracking ${code.toUpperCase()}`)
+			const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), env)
+			if (flightId) {
+				await addFlightTracking(chatId, flightId, env)
+				results.push(`✓ Now tracking ${code.toUpperCase()}`)
+			} else {
+				results.push(`❌ Flight not found: ${code}`)
+			}
 		} else {
 			results.push(`❌ Invalid flight code: ${code}`)
 		}

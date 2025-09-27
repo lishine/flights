@@ -1,25 +1,28 @@
-export interface Flight {
-	flightNumber: string
-	status: string
-	scheduledArrival: string
-	actualArrival: string
-	origin: string
-	ScheduledDateTime: string
-	UpdatedDateTime: string
-	updatedDate: string
-	updatedTime: string
-}
-
 export interface D1Flight {
 	id: string
 	flight_number: string
 	status: string
-	scheduled_departure_time: number | null
-	actual_departure_time: number | null
 	scheduled_arrival_time: number | null
-	actual_arrival_time: number | null
+	estimated_arrival_time: number | null
 	city: string | null
 	airline: string | null
 	created_at: number
 	updated_at: number
+}
+
+export interface RawFlight {
+	Airline: string
+	Flight: string
+	Terminal: string
+	Status: string
+	City: string
+	Country: string | null
+	StatusColor: string
+	ScheduledDateTime: string
+	ScheduledDate: string
+	ScheduledTime: string
+	UpdatedDateTime: string
+	UpdatedDate: string
+	UpdatedTime: string
+	CurrentCultureName: string
 }

@@ -1,24 +1,7 @@
 import { fetchVercel } from '../utils/validation'
 import { DateTime } from 'luxon'
 import type { Env } from '../index'
-import type { D1Flight, Flight } from '../types'
-
-interface RawFlight {
-	Airline: string
-	Flight: string
-	Terminal: string
-	Status: string
-	City: string
-	Country: string | null
-	StatusColor: string
-	ScheduledDateTime: string
-	ScheduledDate: string
-	ScheduledTime: string
-	UpdatedDateTime: string
-	UpdatedDate: string
-	UpdatedTime: string
-	CurrentCultureName: string
-}
+import type { D1Flight, RawFlight } from '../types'
 
 // Parse RawFlight's /Date(<timestamp>)/ string as IDT DateTime
 function parseRawFlightDateTime(dateTimeString: string): DateTime | null {
@@ -60,7 +43,9 @@ function getCurrentIdtTime(): DateTime {
 }
 
 export async function getCurrentFlights(env: Env): Promise<D1Flight[]> {
-	const { results } = await env.DB.prepare('SELECT * FROM flights ORDER BY actual_arrival_time DESC').all<D1Flight>()
+	const { results } = await env.DB.prepare(
+		'SELECT * FROM flights ORDER BY estimated_arrival_time DESC'
+	).all<D1Flight>()
 	if (!results || results.length === 0) {
 		console.error('No flight data available in D1')
 		throw new Error('Flight data unavailable')
@@ -70,33 +55,57 @@ export async function getCurrentFlights(env: Env): Promise<D1Flight[]> {
 }
 
 export async function getCurrentFlightData(flightNumber: string, env: Env): Promise<D1Flight | undefined> {
-	const { results } = await env.DB.prepare('SELECT * FROM flights WHERE flight_number = ?')
+	const { results } = await env.DB.prepare(
+		'SELECT * FROM flights WHERE flight_number = ? ORDER BY estimated_arrival_time ASC'
+	)
 		.bind(flightNumber)
 		.all<D1Flight>()
 	return results?.[0]
+}
+
+export async function getNextFutureFlight(flightNumber: string, env: Env): Promise<D1Flight | undefined> {
+	const nowIdt = getCurrentIdtTime()
+	const { results } = await env.DB.prepare(
+		'SELECT * FROM flights WHERE flight_number = ? AND estimated_arrival_time > ? ORDER BY estimated_arrival_time ASC'
+	)
+		.bind(flightNumber, nowIdt.toMillis())
+		.all<D1Flight>()
+	return results?.[0]
+}
+
+export async function getFlightIdByNumber(flightNumber: string, env: Env): Promise<string | undefined> {
+	// First try to get the next future flight
+	const futureFlight = await getNextFutureFlight(flightNumber, env)
+	if (futureFlight) {
+		return futureFlight.id
+	}
+
+	// If no future flight found, fall back to the soonest arrival (including past ones)
+	const flight = await getCurrentFlightData(flightNumber, env)
+	return flight?.id
 }
 
 export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D1Flight[]> {
 	console.log('suggestFlightsToTrack')
 	const [currentFlights, trackedFlights] = await Promise.all([
 		getCurrentFlights(env),
-		env.DB.prepare('SELECT flight_number FROM subscriptions WHERE telegram_id = ? AND auto_cleanup_at IS NULL')
+		env.DB.prepare('SELECT flight_id FROM subscriptions WHERE telegram_id = ? AND auto_cleanup_at IS NULL')
 			.bind(String(chatId))
-			.all<{ flight_number: string }>(),
+			.all<{ flight_id: string }>(),
 	])
 
 	const nowIdt = getCurrentIdtTime()
-	const trackedFlightNumbers = new Set((trackedFlights.results || []).map((f) => f.flight_number))
-	console.log({ trackedFlights: trackedFlights.results, trackedFlightNumbers: trackedFlightNumbers.size })
+	const trackedFlightIds = new Set((trackedFlights.results || []).map((f) => f.flight_id))
+	console.log({ trackedFlights: trackedFlights.results, trackedFlightIds: trackedFlightIds.size })
 
 	const eligibleFlights = currentFlights.filter((flight) => {
 		// Skip if already tracked
-		if (trackedFlightNumbers.has(flight.flight_number)) {
+		if (trackedFlightIds.has(flight.id)) {
 			return false
 		}
-		const arrivalIdt = getIdtDateTime(flight.actual_arrival_time)
+		const arrivalIdt = getIdtDateTime(flight.estimated_arrival_time)
 		if (!arrivalIdt) {
-			console.log(`Skipping flight ${flight.flight_number} due to invalid actual_arrival_time`)
+			console.log(`Skipping flight ${flight.flight_number} due to invalid estimated_arrival_time`)
 			return false
 		}
 		const hoursUntilArrival = arrivalIdt.diff(nowIdt, 'hours').hours
@@ -108,8 +117,8 @@ export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D
 
 	return eligibleFlights
 		.sort((a, b) => {
-			const arrivalA = getIdtDateTime(a.actual_arrival_time)
-			const arrivalB = getIdtDateTime(b.actual_arrival_time)
+			const arrivalA = getIdtDateTime(a.estimated_arrival_time)
+			const arrivalB = getIdtDateTime(b.estimated_arrival_time)
 			return (arrivalA?.toMillis() ?? 0) - (arrivalB?.toMillis() ?? 0)
 		})
 		.slice(0, 5)
@@ -121,20 +130,20 @@ export async function cleanupCompletedFlights(currentFlights: D1Flight[], env: E
 	console.log(`Cleanup: cutoff=${cutoffIdt.toLocaleString(DateTime.DATETIME_MED)}`)
 
 	for (const flight of currentFlights) {
-		const arrivalIdt = getIdtDateTime(flight.actual_arrival_time)
+		const arrivalIdt = getIdtDateTime(flight.estimated_arrival_time)
 		if (!arrivalIdt) continue
 		if (flight.status === 'LANDED' && arrivalIdt < cutoffIdt) {
 			console.log(
 				`Cleaning up landed flight: ${flight.flight_number}, arrived at ${arrivalIdt.toLocaleString(DateTime.DATETIME_MED)}`
 			)
 			// Delete from D1
-			await env.DB.prepare('DELETE FROM flights WHERE flight_number = ?').bind(flight.flight_number).run()
+			await env.DB.prepare('DELETE FROM flights WHERE id = ?').bind(flight.id).run()
 			// Also clean up tracking data (assuming tracking data is still in KV for now, or will be migrated later)
 			// Clean up completed flights from subscriptions table
 			await env.DB.prepare(
-				"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_number = ? AND auto_cleanup_at IS NULL"
+				"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_id = ? AND auto_cleanup_at IS NULL"
 			)
-				.bind(flight.flight_number)
+				.bind(flight.id)
 				.run()
 		}
 	}
@@ -146,9 +155,9 @@ export function detectChanges(prevFlight: D1Flight, currentFlight: D1Flight): st
 	if (prevFlight.status !== currentFlight.status) {
 		changes.push(`📍 Status: ${currentFlight.status}`)
 	}
-	if (prevFlight.actual_arrival_time !== currentFlight.actual_arrival_time) {
-		const prevDt = getIdtDateTime(prevFlight.actual_arrival_time)
-		const currentDt = getIdtDateTime(currentFlight.actual_arrival_time)
+	if (prevFlight.estimated_arrival_time !== currentFlight.estimated_arrival_time) {
+		const prevDt = getIdtDateTime(prevFlight.estimated_arrival_time)
+		const currentDt = getIdtDateTime(currentFlight.estimated_arrival_time)
 		const prevTime = prevDt?.toLocaleString(DateTime.TIME_SIMPLE) ?? 'TBA'
 		const currentTime = currentDt?.toLocaleString(DateTime.TIME_SIMPLE) ?? 'TBA'
 		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
@@ -164,7 +173,6 @@ export function detectChanges(prevFlight: D1Flight, currentFlight: D1Flight): st
 
 export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 	const response = await fetchVercel('https://flights-taupe.vercel.app/api/tlv-arrivals')
-	console.log('01')
 	const rawData = (await response.json()) as { Flights: RawFlight[] }
 	console.log('Raw API data sample:', JSON.stringify(rawData.Flights.slice(0, 2), null, 2))
 
@@ -201,34 +209,31 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 
 	const newFlights: D1Flight[] = rawData.Flights.map((flight) => {
 		const scheduledArrival = parseRawFlightDateTime(flight.ScheduledDateTime)
-		const actualArrival = parseRawFlightDateTime(flight.UpdatedDateTime)
+		const estimatedArrival = parseRawFlightDateTime(flight.UpdatedDateTime)
+
+		// Generate composite ID from flight number and scheduled arrival time
+		const flightId = `${flight.Flight.replace(' ', '')}_${scheduledArrival?.toMillis() ?? 'unknown'}`
 
 		return {
-			id: crypto.randomUUID(),
+			id: flightId,
 			flight_number: flight.Flight.replace(' ', ''),
 			status: flight.Status,
-			scheduled_departure_time: null, // RawFlight does not provide this
-			actual_departure_time: null, // RawFlight does not provide this
 			scheduled_arrival_time: scheduledArrival?.toMillis() ?? null,
-			actual_arrival_time: actualArrival?.toMillis() ?? null,
+			estimated_arrival_time: estimatedArrival?.toMillis() ?? null,
 			city: flight.City,
 			airline: flight.Airline,
 			created_at: Date.now(),
 			updated_at: Date.now(),
 		}
 	})
-	console.log('02')
 
 	const statements = newFlights.map((flight) =>
 		env.DB.prepare(
-			`INSERT INTO flights (id, flight_number, status, scheduled_departure_time, actual_departure_time, scheduled_arrival_time, actual_arrival_time, city, airline, created_at, updated_at)
-			          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			          ON CONFLICT(flight_number) DO UPDATE SET
+			`INSERT INTO flights (id, flight_number, status, scheduled_arrival_time, estimated_arrival_time, city, airline, created_at, updated_at)
+			          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			          ON CONFLICT(flight_number, scheduled_arrival_time) DO UPDATE SET
 			          status = EXCLUDED.status,
-			          scheduled_departure_time = EXCLUDED.scheduled_departure_time,
-			          actual_departure_time = EXCLUDED.actual_departure_time,
-			          scheduled_arrival_time = EXCLUDED.scheduled_arrival_time,
-			          actual_arrival_time = EXCLUDED.actual_arrival_time,
+			          estimated_arrival_time = EXCLUDED.estimated_arrival_time,
 			          city = EXCLUDED.city,
 			          airline = EXCLUDED.airline,
 			          updated_at = EXCLUDED.updated_at;`
@@ -236,10 +241,8 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 			flight.id,
 			flight.flight_number,
 			flight.status,
-			flight.scheduled_departure_time,
-			flight.actual_departure_time,
 			flight.scheduled_arrival_time,
-			flight.actual_arrival_time,
+			flight.estimated_arrival_time,
 			flight.city,
 			flight.airline,
 			flight.created_at,

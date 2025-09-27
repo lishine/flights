@@ -10,4 +10,4 @@ triggers = { crons = ["*/2 * * * *"] }
 [[d1_databases]]
 binding = "DB" # D1 database binding name
 database_name = "flights-db"
-database_id = "7a1b90eb-ca49-4317-a671-00a75ca77131" # Replace with your D1 database ID
+database_id = "2c6f78c0-bc97-41ce-a379-afb4b66857e2" # Replace with your D1 database ID

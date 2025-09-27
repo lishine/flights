@@ -6,13 +6,15 @@ import type { D1Flight } from '../types'
 export async function formatTrackingList(userFlights: string[], env: Env): Promise<string> {
 	if (userFlights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
 	let message = '✈️ *Your Tracked Flights:*\n\n'
-	for (const flightNum of userFlights) {
+	for (const flightId of userFlights) {
+		// Extract flight number from flight ID (format: "LY086_1698765432")
+		const flightNum = flightId.split('_')[0]
 		const flight = await getCurrentFlightData(flightNum, env)
 		let formattedTime = 'TBA'
 		let dayLabel = ''
 
-		if (flight?.actual_arrival_time) {
-			const arrivalIdt = DateTime.fromMillis(flight.actual_arrival_time).setZone('Asia/Tel_Aviv')
+		if (flight?.estimated_arrival_time) {
+			const arrivalIdt = DateTime.fromMillis(flight.estimated_arrival_time).setZone('Asia/Tel_Aviv')
 			const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
 			const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
 
@@ -57,8 +59,8 @@ export function formatFlightSuggestions(flights: D1Flight[]): { text: string; re
 		let formattedTime = 'TBA'
 		let dayLabel = ''
 
-		if (flight.actual_arrival_time) {
-			const arrivalIdt = DateTime.fromMillis(flight.actual_arrival_time).setZone('Asia/Tel_Aviv')
+		if (flight.estimated_arrival_time) {
+			const arrivalIdt = DateTime.fromMillis(flight.estimated_arrival_time).setZone('Asia/Tel_Aviv')
 			const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
 
 			formattedTime = arrivalIdt.toLocaleString(DateTime.TIME_24_SIMPLE)
