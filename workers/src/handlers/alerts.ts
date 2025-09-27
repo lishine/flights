@@ -51,7 +51,7 @@ async function sendAlert(userId: number, flight: D1Flight, changes: string[], en
 
 	// Check if flight is landed or landing and run cleanup
 	const status = flight.status?.toLowerCase() || ''
-	if (status.includes('landed') || status.includes('landing')) {
+	if (status.includes('landed') || status.includes('landing') || status.includes('canceled')) {
 		console.log(`Flight ${flight.flight_number} is ${status}, running cleanup`)
 		await cleanupStaleTrackingData(flight.id, env)
 	}
