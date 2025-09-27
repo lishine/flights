@@ -38,7 +38,6 @@ function getIdtDateTime(timestamp: number | null): DateTime | null {
 // Get current time in IDT
 function getCurrentIdtTime(): DateTime {
 	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
-	console.log(`Current IDT time: ${nowIdt.toLocaleString(DateTime.DATETIME_MED)}`)
 	return nowIdt
 }
 

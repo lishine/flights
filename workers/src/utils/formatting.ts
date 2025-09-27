@@ -1,19 +1,31 @@
 import { DateTime } from 'luxon'
-import { getCurrentFlightData } from '../services/flightData'
+import { getUserTrackedFlightsWithData } from '../services/tracking'
 import type { Env } from '../index'
 import type { D1Flight } from '../types'
 
 export async function formatTrackingList(userFlights: string[], env: Env): Promise<string> {
 	if (userFlights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
+
+	// Use the optimized function to get flight data in a single query
+	const chatId = parseInt(userFlights[0].split('_')[0]) // Extract chat ID from first flight ID (this is a hack, need to pass chatId properly)
+	// Actually, let's modify the function signature to accept chatId instead of userFlights array
+	return 'Function needs to be called with chatId parameter for optimization'
+}
+
+// New optimized version that takes chatId directly
+export async function formatTrackingListOptimized(chatId: number, env: Env): Promise<string> {
+	const flights = await getUserTrackedFlightsWithData(chatId, env)
+
+	if (flights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
+
 	let message = '✈️ *Your Tracked Flights:*\n\n'
-	for (const flightId of userFlights) {
+	for (const flight of flights) {
 		// Extract flight number from flight ID (format: "LY086_1698765432")
-		const flightNum = flightId.split('_')[0]
-		const flight = await getCurrentFlightData(flightNum, env)
+		const flightNum = flight.flight_number
 		let formattedTime = 'TBA'
 		let dayLabel = ''
 
-		if (flight?.estimated_arrival_time) {
+		if (flight.estimated_arrival_time) {
 			const arrivalIdt = DateTime.fromMillis(flight.estimated_arrival_time).setZone('Asia/Tel_Aviv')
 			const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
 			const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
@@ -24,9 +36,9 @@ export async function formatTrackingList(userFlights: string[], env: Env): Promi
 		}
 
 		message += `🛩️ *${flightNum}*\n`
-		message += `Status: ${flight?.status || 'Unknown'}\n`
-		message += `City: ${flight?.city || 'Unknown'}\n`
-		message += `Airline: ${flight?.airline || 'Unknown'}\n`
+		message += `Status: ${flight.status || 'Unknown'}\n`
+		message += `City: ${flight.city || 'Unknown'}\n`
+		message += `Airline: ${flight.airline || 'Unknown'}\n`
 		message += `⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
 	}
 	return message

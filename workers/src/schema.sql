@@ -31,6 +31,8 @@ CREATE INDEX IF NOT EXISTS idx_active_subs ON subscriptions(auto_cleanup_at) WHE
 CREATE INDEX IF NOT EXISTS idx_cleanup_ready ON subscriptions(auto_cleanup_at) WHERE auto_cleanup_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_user_subs ON subscriptions(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_flight_subs ON subscriptions(flight_id);
+-- Composite index for optimized tracked flights query
+CREATE INDEX IF NOT EXISTS idx_tracked_flights ON subscriptions(telegram_id, auto_cleanup_at) WHERE auto_cleanup_at IS NULL;
 
 -- Create the 'status' table for system-wide metadata
 CREATE TABLE IF NOT EXISTS status (

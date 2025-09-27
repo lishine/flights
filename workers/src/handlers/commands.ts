@@ -1,7 +1,7 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, getUserTrackedFlights, clearUserTracking } from '../services/tracking'
 import { getCurrentFlights, suggestFlightsToTrack, getFlightIdByNumber } from '../services/flightData'
-import { formatTrackingList, formatFlightSuggestions } from '../utils/formatting'
+import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { VERSION } from '../utils/constants'
 import { DateTime } from 'luxon'
@@ -50,12 +50,9 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 
 		if (data.startsWith('track_suggested:')) {
 			const flightCodes = data.split(':')[1].split(',')
-			console.log({ 'to track flightCodes': flightCodes })
 			const results = []
 			for (const code of flightCodes) {
-				console.log({ code: code })
 				if (isValidFlightCode(code)) {
-					console.log('isvalid', { code: code })
 					const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), env)
 					if (flightId) {
 						await addFlightTracking(chatId, flightId, env)
@@ -190,8 +187,8 @@ async function handleStart(chatId: number, env: Env) {
 		`📊 /status - System status\n` +
 		`🚨 /track LY086 - Track a flight\n` +
 		`📋 /tracked - Your tracked flights\n` +
-		`🗑️ /clear_tracked - Clear all tracked flights\n` +
-		`🎯 /test_tracking - Suggested flights\n` +
+		`🗑️ /clear\\_tracked - Clear all tracked flights\n` +
+		`🎯 /test\\_tracking - Suggested flights\n` +
 		`ℹ️ /help - Show this menu\n\n` +
 		`Choose an option:`
 	const replyMarkup = {
@@ -226,8 +223,7 @@ async function handleTrack(chatId: number, text: string, env: Env) {
 }
 
 async function handleTracked(chatId: number, env: Env) {
-	const flights = await getUserTrackedFlights(chatId, env)
-	const message = await formatTrackingList(flights, env)
+	const message = await formatTrackingListOptimized(chatId, env)
 	await sendTelegramMessage(chatId, message, env)
 }
 
