@@ -1,4 +1,5 @@
 import { sendTelegramMessage } from '../services/telegram'
+import { cleanupStaleTrackingData } from '../services/tracking'
 import type { Env } from '../index'
 import type { D1Flight } from '../types'
 
@@ -42,8 +43,15 @@ export async function sendFlightAlerts(
 }
 
 async function sendAlert(userId: number, flight: D1Flight, changes: string[], env: Env) {
-	const message = `🚨 *Flight Update: ${flight.flight_number}*\n\n${changes.join('\n')}\n\n🏙️ City: ${
-		flight.city || 'Unknown'
-	}\n✈️ Airline: ${flight.airline || 'Unknown'}\n`
-	await sendTelegramMessage(userId, message, env, false)
+ 	const message = `🚨 *Flight Update: ${flight.flight_number}*\n\n${changes.join('\n\n')}\n\n🏙️ City: ${
+ 		flight.city || 'Unknown'
+ 	}\n\n✈️ Airline: ${flight.airline || 'Unknown'}\n`
+ 	await sendTelegramMessage(userId, message, env, false)
+
+	// Check if flight is landed or landing and run cleanup
+	const status = flight.status?.toLowerCase() || ''
+	if (status.includes('landed') || status.includes('landing')) {
+		console.log(`Flight ${flight.flight_number} is ${status}, running cleanup`)
+		await cleanupStaleTrackingData(flight.flight_number, env)
+	}
 }

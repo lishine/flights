@@ -21,11 +21,11 @@ export async function formatTrackingList(userFlights: string[], env: Env): Promi
 				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
 		}
 
-		message += `🛫 *${flightNum}*\n`
-		message += `📍 Status: ${flight?.status || 'Unknown'}\n`
-		message += `🏙️ City: ${flight?.city || 'Unknown'}\n`
-		message += `✈️ Airline: ${flight?.airline || 'Unknown'}\n`
-		message += `🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n`
+		message += `🛫 *${flightNum}*\n\n`
+			message += `📍 Status: ${flight?.status || 'Unknown'}\n\n`
+			message += `🏙️ City: ${flight?.city || 'Unknown'}\n\n`
+			message += `✈️ Airline: ${flight?.airline || 'Unknown'}\n\n`
+			message += `🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
 	}
 	return message
 }
@@ -52,10 +52,10 @@ export function formatFlightSuggestions(flights: D1Flight[]): { text: string; re
 				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
 		}
 
-		message += `${index + 1}. 🛫 *${flight.flight_number}*\n`
-		message += `   🏙️ City: ${flight.city || 'Unknown'}\n`
-		message += `   ✈️ Airline: ${flight.airline || 'Unknown'}\n`
-		message += `   🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n`
+		message += `${index + 1}. 🛫 *${flight.flight_number}*\n\n`
+			message += `   🏙️ City: ${flight.city || 'Unknown'}\n\n`
+			message += `   ✈️ Airline: ${flight.airline || 'Unknown'}\n\n`
+			message += `   🕒 Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
 	})
 	message += `Use: \`/track ${flights.map((f) => f.flight_number).join(' ')}\`\n`
 	message += `Or track individually: \`/track LY086\``

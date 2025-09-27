@@ -20,8 +20,52 @@ interface RawFlight {
 	CurrentCultureName: string
 }
 
+// Parse RawFlight's /Date(<timestamp>)/ string as IDT DateTime
+function parseRawFlightDateTime(dateTimeString: string): DateTime | null {
+	const match = dateTimeString.match(/\/Date\((\d+)\)\//)
+	if (!match || !match[1]) {
+		console.error(`Invalid RawFlight DateTime format: ${dateTimeString}`)
+		return null
+	}
+
+	const localTimestamp = Number(match[1])
+	console.log(`Parsing flight timestamp: ${dateTimeString} -> ${localTimestamp}`)
+
+	// Try different timezone interpretations to find the correct one
+	const utcDt = DateTime.fromMillis(localTimestamp)
+	const idtDt = DateTime.fromMillis(localTimestamp).setZone('Asia/Tel_Aviv')
+	const apiAsUtcPlus3Dt = DateTime.fromMillis(localTimestamp - 3 * 60 * 60 * 1000).setZone('Asia/Tel_Aviv')
+
+	console.log(`Raw timestamp: ${localTimestamp}`)
+	console.log(`As UTC: ${utcDt.toISO()}`)
+	console.log(`As IDT: ${idtDt.toISO()}`)
+	console.log(`As UTC+3: ${apiAsUtcPlus3Dt.toISO()}`)
+
+	// The API might be providing timestamps in UTC+3 (IDT) format
+	// If so, we need to treat them as UTC+3 time, not convert from UTC
+	const idtDtFinal = DateTime.fromMillis(localTimestamp - 3 * 60 * 60 * 1000).setZone('Asia/Tel_Aviv')
+
+	if (!idtDtFinal.isValid) {
+		console.error(`Invalid timestamp ${localTimestamp}: ${idtDtFinal.invalidReason}`)
+		return null
+	}
+
+	console.log(
+		`Final parsed IDT time: ${idtDtFinal.toISO()} (local: ${idtDtFinal.toLocaleString(DateTime.DATETIME_MED)})`
+	)
+
+	// Verify this makes sense compared to current time
+	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
+	const hoursDiff = idtDtFinal.diff(nowIdt, 'hours').hours
+	console.log(
+		`Flight time is ${hoursDiff.toFixed(1)} hours from now (current: ${nowIdt.toLocaleString(DateTime.DATETIME_MED)})`
+	)
+
+	return idtDtFinal
+}
+
 // Convert a timestamp (number) to an IDT DateTime object
-function timestampToIdtDateTime(timestamp: number | null): DateTime | null {
+function getIdtDateTime(timestamp: number | null): DateTime | null {
 	if (timestamp === null) {
 		return null
 	}
@@ -38,16 +82,6 @@ function getCurrentIdtTime(): DateTime {
 	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
 	console.log(`Current IDT time: ${nowIdt.toLocaleString(DateTime.DATETIME_MED)}`)
 	return nowIdt
-}
-
-// Parse RawFlight's /Date(<timestamp>)/ string to a number timestamp (epoch milliseconds)
-function parseRawFlightDateTime(dateTimeString: string): number | null {
-	const match = dateTimeString.match(/\/Date\((\d+)\)\//)
-	if (!match || !match[1]) {
-		console.error(`Invalid RawFlight DateTime format: ${dateTimeString}`)
-		return null
-	}
-	return Number(match[1])
 }
 
 export async function getCurrentFlights(env: Env): Promise<D1Flight[]> {
@@ -67,26 +101,37 @@ export async function getCurrentFlightData(flightNumber: string, env: Env): Prom
 	return results?.[0]
 }
 
-export async function suggestFlightsToTrack(env: Env): Promise<D1Flight[]> {
-	const currentFlights = await getCurrentFlights(env)
+export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D1Flight[]> {
+	const [currentFlights, trackedFlights] = await Promise.all([
+		getCurrentFlights(env),
+		env.DB.prepare('SELECT flight_number FROM subscriptions WHERE telegram_id = ? AND auto_cleanup_at IS NULL')
+			.bind(String(chatId))
+			.all<{ flight_number: string }>(),
+	])
+
 	const nowIdt = getCurrentIdtTime()
+	const trackedFlightNumbers = new Set((trackedFlights.results || []).map((f) => f.flight_number))
 
 	const eligibleFlights = currentFlights.filter((flight) => {
-		const arrivalIdt = timestampToIdtDateTime(flight.actual_arrival_time)
+		// Skip if already tracked
+		if (trackedFlightNumbers.has(flight.flight_number)) {
+			return false
+		}
+		const arrivalIdt = getIdtDateTime(flight.actual_arrival_time)
 		if (!arrivalIdt) {
 			console.log(`Skipping flight ${flight.flight_number} due to invalid actual_arrival_time`)
 			return false
 		}
 		const hoursUntilArrival = arrivalIdt.diff(nowIdt, 'hours').hours
-		const isFutureFlight = hoursUntilArrival >= 1
+		const isFutureFlight = hoursUntilArrival >= 0.5
 		const isSameOrFutureDay = arrivalIdt.toFormat('yyyy-MM-dd') >= nowIdt.toFormat('yyyy-MM-dd')
 		return isFutureFlight && isSameOrFutureDay && flight.status !== 'LANDED' && flight.status !== 'CANCELED'
 	})
 
 	return eligibleFlights
 		.sort((a, b) => {
-			const arrivalA = timestampToIdtDateTime(a.actual_arrival_time)
-			const arrivalB = timestampToIdtDateTime(b.actual_arrival_time)
+			const arrivalA = getIdtDateTime(a.actual_arrival_time)
+			const arrivalB = getIdtDateTime(b.actual_arrival_time)
 			return (arrivalA?.toMillis() ?? 0) - (arrivalB?.toMillis() ?? 0)
 		})
 		.slice(0, 5)
@@ -98,7 +143,7 @@ export async function cleanupCompletedFlights(currentFlights: D1Flight[], env: E
 	console.log(`Cleanup: cutoff=${cutoffIdt.toLocaleString(DateTime.DATETIME_MED)}`)
 
 	for (const flight of currentFlights) {
-		const arrivalIdt = timestampToIdtDateTime(flight.actual_arrival_time)
+		const arrivalIdt = getIdtDateTime(flight.actual_arrival_time)
 		if (!arrivalIdt) continue
 		if (flight.status === 'LANDED' && arrivalIdt < cutoffIdt) {
 			console.log(
@@ -124,18 +169,10 @@ export function detectChanges(prevFlight: D1Flight, currentFlight: D1Flight): st
 		changes.push(`📍 Status: ${currentFlight.status}`)
 	}
 	if (prevFlight.actual_arrival_time !== currentFlight.actual_arrival_time) {
-		const prevTime = prevFlight.actual_arrival_time
-			? new Date(prevFlight.actual_arrival_time).toLocaleTimeString('en-US', {
-					hour: '2-digit',
-					minute: '2-digit',
-				})
-			: 'TBA'
-		const currentTime = currentFlight.actual_arrival_time
-			? new Date(currentFlight.actual_arrival_time).toLocaleTimeString('en-US', {
-					hour: '2-digit',
-					minute: '2-digit',
-				})
-			: 'TBA'
+		const prevDt = getIdtDateTime(prevFlight.actual_arrival_time)
+		const currentDt = getIdtDateTime(currentFlight.actual_arrival_time)
+		const prevTime = prevDt?.toLocaleString(DateTime.TIME_SIMPLE) ?? 'TBA'
+		const currentTime = currentDt?.toLocaleString(DateTime.TIME_SIMPLE) ?? 'TBA'
 		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
 	}
 	if (prevFlight.city !== currentFlight.city) {
@@ -185,8 +222,8 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 		.run()
 
 	const newFlights: D1Flight[] = rawData.Flights.map((flight) => {
-		const scheduledArrivalTime = parseRawFlightDateTime(flight.ScheduledDateTime)
-		const actualArrivalTime = parseRawFlightDateTime(flight.UpdatedDateTime)
+		const scheduledArrival = parseRawFlightDateTime(flight.ScheduledDateTime)
+		const actualArrival = parseRawFlightDateTime(flight.UpdatedDateTime)
 
 		return {
 			id: crypto.randomUUID(),
@@ -194,8 +231,8 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 			status: flight.Status,
 			scheduled_departure_time: null, // RawFlight does not provide this
 			actual_departure_time: null, // RawFlight does not provide this
-			scheduled_arrival_time: scheduledArrivalTime,
-			actual_arrival_time: actualArrivalTime,
+			scheduled_arrival_time: scheduledArrival?.toMillis() ?? null,
+			actual_arrival_time: actualArrival?.toMillis() ?? null,
 			city: flight.City,
 			airline: flight.Airline,
 			created_at: Date.now(),

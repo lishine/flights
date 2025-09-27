@@ -29,10 +29,24 @@ export async function removeFlightTracking(userId: number, flightCode: string, e
 }
 
 export async function cleanupStaleTrackingData(flightNumber: string, env: Env): Promise<void> {
-	// Schedule cleanup in D1
-	await env.DB.prepare(
-		"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_number = ? AND auto_cleanup_at IS NULL"
-	)
-		.bind(flightNumber)
-		.run()
-}
+ 	// Schedule cleanup in D1
+ 	await env.DB.prepare(
+ 		"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+1 hours') WHERE flight_number = ? AND auto_cleanup_at IS NULL"
+ 	)
+ 		.bind(flightNumber)
+ 		.run()
+ }
+
+export async function clearUserTracking(userId: number, env: Env): Promise<number> {
+ 	// First get count of subscriptions to be deleted
+ 	const countResult = await env.DB.prepare('SELECT COUNT(*) as count FROM subscriptions WHERE telegram_id = ?')
+ 		.bind(String(userId))
+ 		.first<{ count: number }>()
+
+ 	// Then delete them
+ 	await env.DB.prepare('DELETE FROM subscriptions WHERE telegram_id = ?')
+ 		.bind(String(userId))
+ 		.run()
+
+ 	return countResult?.count || 0
+ }
