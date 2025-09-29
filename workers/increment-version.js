@@ -3,7 +3,7 @@ const fs = require('fs')
 const vPath = 'version.json'
 let data = fs.readFileSync(vPath, 'utf8')
 let json = JSON.parse(data)
-json.version += 1
+// json.version += 1
 fs.writeFileSync(vPath, JSON.stringify(json, null, 2))
 
 const constantsPath = 'src/utils/constants.ts'

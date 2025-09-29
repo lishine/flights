@@ -3,7 +3,7 @@
 	"version": "0.0.2",
 	"private": true,
 	"scripts": {
-		"ppprebuild": "node increment-version.js",
+		"prebuild": "node increment-version.js",
 		"deploy": "wrangler deploy",
 		"build": "esbuild src/index.ts --bundle --outfile=dist/worker.js --format=esm --target=es2022",
 		"dev": "wrangler dev",
