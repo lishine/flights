@@ -88,7 +88,6 @@ async function getBrowser() {
 }
 
 export default async function handler(req, res) {
-  const startTime = Date.now();
   let page = null;
 
   try {
@@ -167,7 +166,7 @@ export default async function handler(req, res) {
 
           if (url.includes("FlightBoardSurface/Search")) {
             console.log(
-              `Found target response after ${Date.now() - startTime}ms`
+              `Found target response`
             );
             clearTimeout(timeout);
             responseReceived = true;
@@ -186,7 +185,7 @@ export default async function handler(req, res) {
       });
     });
 
-    console.log(`Navigating to page... (${Date.now() - startTime}ms)`);
+    console.log(`Navigating to page...`);
 
     // Navigate with minimal wait
     await page.goto(
@@ -197,22 +196,19 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log(
-      `Page loaded, waiting for API response... (${Date.now() - startTime}ms)`
-    );
+    console.log(`Page loaded, waiting for API response...`);
 
     // Wait for the API response
     await responsePromise;
 
     if (!flightData) {
-      console.log(`No data received after ${Date.now() - startTime}ms`);
+      console.log(`No data received`);
       return res.status(500).json({
         error: "Did not capture FlightBoardSurface/Search response",
-        timing: `${Date.now() - startTime}ms`,
       });
     }
 
-    console.log(`Success! Total time: ${Date.now() - startTime}ms`);
+    console.log(`Success!`);
 
     // Transform flight data to parse timestamps and filter fields
     const nowIdt = getCurrentIdtTime();
@@ -246,7 +242,7 @@ export default async function handler(req, res) {
       // Filter to only next 12 hours flights
       if (flight.scheduled_arrival_time) {
         const scheduledTime = new Date(flight.scheduled_arrival_time);
-        return scheduledTime >= now && scheduledTime <= twelveHoursFromNow;
+        return scheduledTime >= nowIdt && scheduledTime <= twelveHoursFromNow;
       }
 
       return false;
@@ -254,16 +250,11 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       Flights: transformedFlights,
-      _metadata: {
-        executionTime: `${Date.now() - startTime}ms`,
-        timestamp: new Date().toISOString(),
-      },
     });
   } catch (err) {
-    console.error(`Error after ${Date.now() - startTime}ms:`, err);
+    console.error(`Error:`, err);
     res.status(500).json({
       error: err.message,
-      timing: `${Date.now() - startTime}ms`,
     });
   } finally {
     // Close page but keep browser alive for next request
