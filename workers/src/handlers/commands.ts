@@ -1,6 +1,7 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, getUserTrackedFlights, clearUserTracking } from '../services/tracking'
-import { getCurrentFlights, suggestFlightsToTrack, getFlightIdByNumber, getCurrentIdtTime } from '../services/flightData'
+import { getCurrentFlights, suggestFlightsToTrack, getFlightIdByNumber } from '../services/flightData'
+import { getCurrentIdtTime } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { VERSION } from '../utils/constants'

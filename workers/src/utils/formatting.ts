@@ -1,5 +1,6 @@
 
 import { getUserTrackedFlightsWithData } from '../services/tracking'
+import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../index'
 import type { D1Flight } from '../types'
 
@@ -16,14 +17,14 @@ function formatTimeFromTimestamp(timestamp: number): string {
 // Helper function to get day label from timestamp
 function getDayLabelFromTimestamp(timestamp: number): string {
 	const date = new Date(timestamp)
-	const today = new Date()
-	const tomorrow = new Date(today)
-	tomorrow.setDate(tomorrow.getDate() + 1)
+	const todayIdt = getCurrentIdtTime()
+	const tomorrowIdt = new Date(todayIdt)
+	tomorrowIdt.setDate(tomorrowIdt.getDate() + 1)
 
 	// Reset time to compare dates only
 	const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-	const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-	const tomorrowOnly = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
+	const todayOnly = new Date(todayIdt.getFullYear(), todayIdt.getMonth(), todayIdt.getDate())
+	const tomorrowOnly = new Date(tomorrowIdt.getFullYear(), tomorrowIdt.getMonth(), tomorrowIdt.getDate())
 
 	if (dateOnly.getTime() === todayOnly.getTime()) {
 		return 'Today'

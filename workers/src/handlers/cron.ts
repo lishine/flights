@@ -1,4 +1,5 @@
-import { fetchLatestFlights, cleanupCompletedFlights, getCurrentFlights, detectChanges, getCurrentIdtTime } from '../services/flightData'
+import { fetchLatestFlights, cleanupCompletedFlights, getCurrentFlights, detectChanges } from '../services/flightData'
+import { getCurrentIdtTime } from '../utils/dateTime'
 import { sendFlightAlerts } from './alerts'
 import type { Env } from '../index'
 import type { D1Flight } from '../types'

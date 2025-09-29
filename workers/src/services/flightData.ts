@@ -1,25 +1,8 @@
 
 import { fetchVercel } from '../utils/validation'
+import { getCurrentIdtTime } from '../utils/dateTime'
 import type { Env } from '../index'
 import type { D1Flight } from '../types'
-
-// Cache for current Israel time (per request)
-let cachedIsraelTime: Date | null = null
-
-// Get current time in Israel timezone (handles DST automatically)
-export function getCurrentIdtTime(): Date {
-	// Return cached time if available (same request)
-	if (cachedIsraelTime) {
-		return cachedIsraelTime
-	}
-
-	// Use native JavaScript to get current time in Israel timezone (handles DST automatically)
-	const now = new Date()
-	const israelTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}))
-	cachedIsraelTime = israelTime
-
-	return cachedIsraelTime
-}
 
 // Convert timestamp to Date object
 function getIdtDateTime(timestamp: number | null): Date | null {
