@@ -14,6 +14,14 @@ function parseTimestamp(dateTimeString) {
   return parseInt(match[1]);
 }
 
+// Get current time in Israel timezone (handles DST automatically)
+function getCurrentIdtTime() {
+  // Create a date object for Israel timezone
+  const now = new Date();
+  const israelTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+  return israelTime;
+}
+
 async function getBrowser() {
   if (cachedBrowser && cachedBrowser.connected) {
     console.log("Reusing cached browser");
@@ -206,12 +214,43 @@ export default async function handler(req, res) {
 
     console.log(`Success! Total time: ${Date.now() - startTime}ms`);
 
-    // Transform flight data to parse timestamps
-    const transformedFlights = flightData.Flights?.map(flight => ({
-      ...flight,
-      ScheduledDateTime: parseTimestamp(flight.ScheduledDateTime),
-      UpdatedDateTime: parseTimestamp(flight.UpdatedDateTime),
-    })) || [];
+    // Transform flight data to parse timestamps and filter fields
+    const nowIdt = getCurrentIdtTime();
+    const twelveHoursFromNow = new Date(nowIdt.getTime() + (12 * 60 * 60 * 1000));
+
+    const transformedFlights = flightData.Flights?.map(flight => {
+      const scheduledArrival = parseTimestamp(flight.ScheduledDateTime);
+      const estimatedArrival = parseTimestamp(flight.UpdatedDateTime);
+
+      // Generate composite ID from flight number and scheduled arrival time
+      const flightId = `${flight.Flight.replace(' ', '')}_${scheduledArrival ?? 'unknown'}`;
+
+      return {
+        id: flightId,
+        flight_number: flight.Flight.replace(' ', ''),
+        status: flight.Status,
+        scheduled_arrival_time: scheduledArrival,
+        estimated_arrival_time: estimatedArrival,
+        city: flight.City,
+        airline: flight.Airline,
+        created_at: nowIdt.getTime(),
+        updated_at: nowIdt.getTime(),
+      };
+    })
+    .filter(flight => {
+      // Filter out canceled and landed flights
+      if (flight.status === 'CANCELED' || flight.status === 'LANDED') {
+        return false;
+      }
+
+      // Filter to only next 12 hours flights
+      if (flight.scheduled_arrival_time) {
+        const scheduledTime = new Date(flight.scheduled_arrival_time);
+        return scheduledTime >= now && scheduledTime <= twelveHoursFromNow;
+      }
+
+      return false;
+    }) || [];
 
     res.status(200).json({
       Flights: transformedFlights,

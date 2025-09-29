@@ -1,23 +1,22 @@
 
 import { fetchVercel } from '../utils/validation'
 import type { Env } from '../index'
-import type { D1Flight, RawFlight } from '../types'
-import { DateTime } from 'luxon'
+import type { D1Flight } from '../types'
 
 // Cache for current Israel time (per request)
 let cachedIsraelTime: Date | null = null
 
-// Get current time in Israel timezone using Luxon for proper DST handling
+// Get current time in Israel timezone (handles DST automatically)
 export function getCurrentIdtTime(): Date {
 	// Return cached time if available (same request)
 	if (cachedIsraelTime) {
 		return cachedIsraelTime
 	}
 
-	// Use Luxon to get current time in Israel timezone (handles DST automatically)
-	const israelTime = DateTime.now().setZone('Asia/Jerusalem')
-	// Convert to native Date object for consistency with rest of codebase
-	cachedIsraelTime = new Date(israelTime.toISO()!)
+	// Use native JavaScript to get current time in Israel timezone (handles DST automatically)
+	const now = new Date()
+	const israelTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}))
+	cachedIsraelTime = israelTime
 
 	return cachedIsraelTime
 }
@@ -159,8 +158,8 @@ export function detectChanges(prevFlight: D1Flight, currentFlight: D1Flight): st
 
 export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 	const response = await fetchVercel('https://flights-taupe.vercel.app/api/tlv-arrivals')
-	const rawData = (await response.json()) as { Flights: RawFlight[] }
-	console.log('Raw API data sample:', JSON.stringify(rawData.Flights.slice(0, 2), null, 2))
+	const rawData = (await response.json()) as { Flights: D1Flight[] }
+	console.log('API data sample:', JSON.stringify(rawData.Flights.slice(0, 2), null, 2))
 
 	// Initialize or update status table with metadata
 	await env.DB.prepare(
@@ -168,7 +167,7 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 		INSERT INTO status (key, value)
 		VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-	`
+		`
 	)
 		.bind('lastUpdated', Date.now().toString())
 		.run()
@@ -178,7 +177,7 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 		INSERT INTO status (key, value)
 		VALUES (?, '1')
 		ON CONFLICT(key) DO UPDATE SET value = CAST((CAST(value AS INTEGER) + 1) AS TEXT)
-	`
+		`
 	)
 		.bind('updateCount')
 		.run()
@@ -188,32 +187,12 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 		INSERT INTO status (key, value)
 		VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-	`
+		`
 	)
 		.bind('dataLength', rawData.Flights.length.toString())
 		.run()
 
-	const newFlights: D1Flight[] = rawData.Flights.map((flight) => {
-		// Timestamps are already parsed by the API as numbers
-		const scheduledArrival = flight.ScheduledDateTime
-		const estimatedArrival = flight.UpdatedDateTime
-
-		// Generate composite ID from flight number and scheduled arrival time
-		const flightId = `${flight.Flight.replace(' ', '')}_${scheduledArrival ?? 'unknown'}`
-
-		const nw = Date.now()
-		return {
-			id: flightId,
-			flight_number: flight.Flight.replace(' ', ''),
-			status: flight.Status,
-			scheduled_arrival_time: scheduledArrival ?? null,
-			estimated_arrival_time: estimatedArrival ?? null,
-			city: flight.City,
-			airline: flight.Airline,
-			created_at: nw,
-			updated_at: nw,
-		}
-	})
+	const newFlights: D1Flight[] = rawData.Flights
 
 	const statements = newFlights.map((flight) =>
 		env.DB.prepare(

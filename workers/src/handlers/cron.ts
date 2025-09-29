@@ -1,4 +1,4 @@
-import { fetchLatestFlights, cleanupCompletedFlights, getCurrentFlights, detectChanges } from '../services/flightData'
+import { fetchLatestFlights, cleanupCompletedFlights, getCurrentFlights, detectChanges, getCurrentIdtTime } from '../services/flightData'
 import { sendFlightAlerts } from './alerts'
 import type { Env } from '../index'
 import type { D1Flight } from '../types'
@@ -65,7 +65,7 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 		}
 
 		// Update status table with counters/timestamps
-		const timestamp = new Date().toISOString()
+		const timestamp = getCurrentIdtTime().toISOString()
 		await env.DB.prepare('INSERT OR REPLACE INTO status (key, value) VALUES (?, ?)')
 			.bind('update-counter', currentCount.toString())
 			.run()
@@ -79,7 +79,7 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 		return new Response('Cron job completed')
 	} catch (error) {
 		console.error('Cron job failed:', error)
-		const errorTimestamp = new Date().toISOString()
+		const errorTimestamp = getCurrentIdtTime().toISOString()
 		await env.DB.prepare('INSERT OR REPLACE INTO status (key, value) VALUES (?, ?)')
 			.bind(
 				'last-error',
