@@ -19,15 +19,14 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 		const previousFlightsMap = Object.fromEntries(
     		previousFlights.map(f => [f.id, f])
 		) as Record<string, D1Flight>
-		return new Response('Cron job completed')
-
+x
 		// Fetch new flights from API and update D1 flights table
 		const currentFlights = await fetchLatestFlights(env)
-		const currentFlightsMap = currentFlights.reduce(
-			(acc, f) => ({ ...acc, [f.id]: f }),
-			{} as Record<string, D1Flight>
-		)
+		const currentFlightsMap = Object.fromEntries(
+    		currentFlights.map(f => [f.id, f])
+		) as Record<string, D1Flight>
 
+		return new Response('Cron job completed')
 
 		// Detect changes and prepare alerts
 		const changesByFlight: Record<string, { flight: D1Flight; changes: string[] }> = {}
