@@ -19,7 +19,7 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 		const previousFlightsMap = Object.fromEntries(
     		previousFlights.map(f => [f.id, f])
 		) as Record<string, D1Flight>
-x
+
 		// Fetch new flights from API and update D1 flights table
 		const currentFlights = await fetchLatestFlights(env)
 		const currentFlightsMap = Object.fromEntries(
