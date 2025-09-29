@@ -8,14 +8,15 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 	try {
 		
 		// Get update counter from status table
-		const counterResult = await env.DB.prepare('SELECT value FROM status WHERE key = ?')
-			.bind('update-counter')
-			.first<{ value: string }>()
-		const currentCount = Number(counterResult?.value || '0') + 1
+		// const counterResult = await env.DB.prepare('SELECT value FROM status WHERE key = ?')
+		// 	.bind('update-counter')
+		// 	.first<{ value: string }>()
+		// const currentCount = Number(counterResult?.value || '0') + 1
 		// Read previous flights from D1 flights table (current state before update)
 		const { results: previousFlights } = await env.DB.prepare(
 			'SELECT * FROM flights ORDER BY updated_at DESC'
 		).all<D1Flight>()
+		return new Response('Cron job completed')
 		const previousFlightsMap = previousFlights.reduce(
 			(acc, f) => ({ ...acc, [f.id]: f }),
 			{} as Record<string, D1Flight>
@@ -28,7 +29,6 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 			{} as Record<string, D1Flight>
 		)
 
-		return new Response('Cron job completed')
 
 		// Detect changes and prepare alerts
 		const changesByFlight: Record<string, { flight: D1Flight; changes: string[] }> = {}
