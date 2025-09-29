@@ -213,6 +213,7 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 		// Generate composite ID from flight number and scheduled arrival time
 		const flightId = `${flight.Flight.replace(' ', '')}_${scheduledArrival?.toMillis() ?? 'unknown'}`
 
+		const nw = Date.now()
 		return {
 			id: flightId,
 			flight_number: flight.Flight.replace(' ', ''),
@@ -221,8 +222,8 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 			estimated_arrival_time: estimatedArrival?.toMillis() ?? null,
 			city: flight.City,
 			airline: flight.Airline,
-			created_at: Date.now(),
-			updated_at: Date.now(),
+			created_at: nw,
+			updated_at: nw,
 		}
 	})
 
