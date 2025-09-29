@@ -6,7 +6,7 @@ import type { D1Flight } from '../types'
 
 export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<Response> {
 	try {
-		return new Response('Cron job completed')
+		
 		// Get update counter from status table
 		const counterResult = await env.DB.prepare('SELECT value FROM status WHERE key = ?')
 			.bind('update-counter')
@@ -27,6 +27,8 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 			(acc, f) => ({ ...acc, [f.id]: f }),
 			{} as Record<string, D1Flight>
 		)
+
+		return new Response('Cron job completed')
 
 		// Detect changes and prepare alerts
 		const changesByFlight: Record<string, { flight: D1Flight; changes: string[] }> = {}
