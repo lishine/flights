@@ -16,11 +16,11 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 		const { results: previousFlights } = await env.DB.prepare(
 			'SELECT * FROM flights ORDER BY updated_at DESC'
 		).all<D1Flight>()
-		return new Response('Cron job completed')
 		const previousFlightsMap = previousFlights.reduce(
 			(acc, f) => ({ ...acc, [f.id]: f }),
 			{} as Record<string, D1Flight>
 		)
+		return new Response('Cron job completed')
 
 		// Fetch new flights from API and update D1 flights table
 		const currentFlights = await fetchLatestFlights(env)
