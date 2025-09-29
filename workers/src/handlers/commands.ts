@@ -1,12 +1,24 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, getUserTrackedFlights, clearUserTracking } from '../services/tracking'
-import { getCurrentFlights, suggestFlightsToTrack, getFlightIdByNumber } from '../services/flightData'
+import { getCurrentFlights, suggestFlightsToTrack, getFlightIdByNumber, getCurrentIdtTime } from '../services/flightData'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { VERSION } from '../utils/constants'
-import { DateTime } from 'luxon'
 import type { Env } from '../index'
 import type { Update, CallbackQuery, Message } from 'typegram'
+
+// Helper function to format timestamp for display
+function formatTimestampForDisplay(timestamp: number): string {
+	const date = new Date(timestamp)
+	return date.toLocaleString('en-GB', {
+		day: '2-digit',
+		month: '2-digit',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: false
+	})
+}
 
 // Type guard to check if CallbackQuery is DataQuery (has 'data' property)
 function isDataQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
@@ -93,9 +105,7 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 
 			if (lastUpdated?.value) {
 				const lastUpdateTimestamp = parseInt(lastUpdated.value)
-				const lastUpdate = DateTime.fromMillis(lastUpdateTimestamp)
-					.setZone('Asia/Tel_Aviv')
-					.toLocaleString(DateTime.DATETIME_MED)
+				const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
 				responseText =
 					`🛩️ *Flight Data Refreshed*\n\n` +
 					`📅 Updated: ${lastUpdate}\n` +
@@ -114,7 +124,8 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 
 			if (lastUpdated?.value) {
 				const timestamp = parseInt(lastUpdated.value)
-				const timeDiff = Date.now() - timestamp
+				const nowIsrael = getCurrentIdtTime().getTime()
+				const timeDiff = nowIsrael - timestamp
 				const minutesAgo = Math.floor(timeDiff / 60000)
 				responseText =
 					`📊 *System Status*\n\n` +
@@ -253,9 +264,7 @@ async function handleFlights(chatId: number, env: Env) {
 	let replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_flights' }]] }
 	if (lastUpdated?.value) {
 		const lastUpdateTimestamp = parseInt(lastUpdated.value)
-		const lastUpdate = DateTime.fromMillis(lastUpdateTimestamp)
-			.setZone('Asia/Tel_Aviv')
-			.toLocaleString(DateTime.DATETIME_MED)
+		const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
 		responseText =
 			`🛩️ *Latest Flight Data*\n\n` +
 			`📅 Updated: ${lastUpdate}\n` +
@@ -279,7 +288,8 @@ async function handleStatus(chatId: number, env: Env) {
 	let responseText = '📊 *System Status*\n\n'
 	if (lastUpdated?.value) {
 		const timestamp = parseInt(lastUpdated.value)
-		const timeDiff = Date.now() - timestamp
+		const nowIsrael = getCurrentIdtTime().getTime()
+		const timeDiff = nowIsrael - timestamp
 		const minutesAgo = Math.floor(timeDiff / 60000)
 		responseText +=
 			`✅ System: Online\n\n` +

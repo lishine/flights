@@ -18,10 +18,10 @@ export interface RawFlight {
 	City: string
 	Country: string | null
 	StatusColor: string
-	ScheduledDateTime: string
+	ScheduledDateTime: number
 	ScheduledDate: string
 	ScheduledTime: string
-	UpdatedDateTime: string
+	UpdatedDateTime: number
 	UpdatedDate: string
 	UpdatedTime: string
 	CurrentCultureName: string

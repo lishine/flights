@@ -1,7 +1,38 @@
-import { DateTime } from 'luxon'
+
 import { getUserTrackedFlightsWithData } from '../services/tracking'
 import type { Env } from '../index'
 import type { D1Flight } from '../types'
+
+// Helper function to format time from timestamp
+function formatTimeFromTimestamp(timestamp: number): string {
+	const date = new Date(timestamp)
+	return date.toLocaleTimeString('en-GB', {
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: false
+	})
+}
+
+// Helper function to get day label from timestamp
+function getDayLabelFromTimestamp(timestamp: number): string {
+	const date = new Date(timestamp)
+	const today = new Date()
+	const tomorrow = new Date(today)
+	tomorrow.setDate(tomorrow.getDate() + 1)
+
+	// Reset time to compare dates only
+	const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+	const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+	const tomorrowOnly = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
+
+	if (dateOnly.getTime() === todayOnly.getTime()) {
+		return 'Today'
+	} else if (dateOnly.getTime() === tomorrowOnly.getTime()) {
+		return 'Tomorrow'
+	} else {
+		return date.toLocaleDateString('en-US', { weekday: 'long' })
+	}
+}
 
 export async function formatTrackingList(userFlights: string[], env: Env): Promise<string> {
 	if (userFlights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
@@ -26,13 +57,8 @@ export async function formatTrackingListOptimized(chatId: number, env: Env): Pro
 		let dayLabel = ''
 
 		if (flight.estimated_arrival_time) {
-			const arrivalIdt = DateTime.fromMillis(flight.estimated_arrival_time).setZone('Asia/Tel_Aviv')
-			const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
-			const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
-
-			formattedTime = arrivalIdt.toLocaleString(DateTime.TIME_24_SIMPLE)
-			dayLabel =
-				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
+			formattedTime = formatTimeFromTimestamp(flight.estimated_arrival_time)
+			dayLabel = getDayLabelFromTimestamp(flight.estimated_arrival_time)
 		}
 
 		message += `🛩️ *${flightNum}*\n`
@@ -65,19 +91,14 @@ export function formatFlightSuggestions(flights: D1Flight[]): { text: string; re
 			replyMarkup: null,
 		}
 	}
-	const nowIdt = DateTime.now().setZone('Asia/Tel_Aviv')
 	let message = '🎯 *Suggested Flights to Track:*\n\nThese flights arrive in 1+ hours:\n\n'
 	flights.forEach((flight, index) => {
 		let formattedTime = 'TBA'
 		let dayLabel = ''
 
 		if (flight.estimated_arrival_time) {
-			const arrivalIdt = DateTime.fromMillis(flight.estimated_arrival_time).setZone('Asia/Tel_Aviv')
-			const dayDiff = Math.round(arrivalIdt.diff(nowIdt, 'days').days)
-
-			formattedTime = arrivalIdt.toLocaleString(DateTime.TIME_24_SIMPLE)
-			dayLabel =
-				dayDiff === 0 ? 'Today' : dayDiff === 1 ? 'Tomorrow' : arrivalIdt.toLocaleString({ weekday: 'long' })
+			formattedTime = formatTimeFromTimestamp(flight.estimated_arrival_time)
+			dayLabel = getDayLabelFromTimestamp(flight.estimated_arrival_time)
 		}
 
 		message += `${index + 1}. 🛩️ *${escapeMarkdown(flight.flight_number)}*\n`

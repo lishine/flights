@@ -4,6 +4,16 @@ import puppeteer from "puppeteer-core";
 // Cache browser instance globally (Vercel keeps functions warm)
 let cachedBrowser = null;
 
+// Parse RawFlight's /Date(<timestamp>)/ string to Unix timestamp in milliseconds
+function parseTimestamp(dateTimeString) {
+  const match = dateTimeString.match(/\/Date\((\d+)\)\//);
+  if (!match || !match[1]) {
+    console.error(`Invalid timestamp format: ${dateTimeString}`);
+    return null;
+  }
+  return parseInt(match[1]);
+}
+
 async function getBrowser() {
   if (cachedBrowser && cachedBrowser.connected) {
     console.log("Reusing cached browser");
@@ -195,8 +205,16 @@ export default async function handler(req, res) {
     }
 
     console.log(`Success! Total time: ${Date.now() - startTime}ms`);
+
+    // Transform flight data to parse timestamps
+    const transformedFlights = flightData.Flights?.map(flight => ({
+      ...flight,
+      ScheduledDateTime: parseTimestamp(flight.ScheduledDateTime),
+      UpdatedDateTime: parseTimestamp(flight.UpdatedDateTime),
+    })) || [];
+
     res.status(200).json({
-      ...flightData,
+      Flights: transformedFlights,
       _metadata: {
         executionTime: `${Date.now() - startTime}ms`,
         timestamp: new Date().toISOString(),
