@@ -20,14 +20,14 @@ export default {
 			const stub = env.FLIGHTS_DO.getByName('alarm')
 			// Forward request to durable object
 			return await stub.fetch(request)
+		} else {
+			// 	const stub = env.FLIGHTS_DO.getByName('alarm')
+
+			// const greeting = await stub.sayHello()
+			const greeting = 'ggg'
+
+			return new Response(`OK ${greeting}`, { status: 200 })
 		}
-		// else {
-		// 	const stub = env.FLIGHTS_DO.getByName('alarm')
-
-		// 	const greeting = await stub.sayHello()
-
-		// 	return new Response(`OK ${greeting}`, { status: 200 })
-		// }
 	},
 
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<Response> {
