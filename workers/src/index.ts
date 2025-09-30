@@ -10,21 +10,24 @@ export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
 		// Get durable object instance by name (using pathname as the name)
-		const stub = env.FLIGHTS_DO.getByName(new URL(request.url).pathname)
 
 		if (request.method === 'POST' && url.pathname === '/webhook') {
 			return handleCommand(request, env)
 		}
 
 		// For testing durable object endpoints
-		if (url.pathname.startsWith('/do/')) {
+		if (url.pathname.startsWith('/alarm/')) {
+			const stub = env.FLIGHTS_DO.getByName('alarm')
 			// Forward request to durable object
 			return await stub.fetch(request)
 		}
+		// else {
+		// 	const stub = env.FLIGHTS_DO.getByName('alarm')
 
-		const greeting = await stub.sayHello()
+		// 	const greeting = await stub.sayHello()
 
-		return new Response(`OK ${greeting}`, { status: 200 })
+		// 	return new Response(`OK ${greeting}`, { status: 200 })
+		// }
 	},
 
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<Response> {
