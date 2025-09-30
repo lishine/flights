@@ -76,19 +76,19 @@ export class FlightDO extends DurableObject<Env> {
 	 */
 	async alarm(): Promise<void> {
 		console.log('alarm')
-		// // Get current count, increment, and store using sync helper methods
-		// const currentCount = this.getAlarmCount()
-		// const newCount = currentCount + 1
+		// Get current count, increment, and store using sync helper methods
+		const currentCount = this.getAlarmCount()
+		const newCount = currentCount + 1
 
-		// console.log(`Alarm fired! Count: ${newCount}`)
+		console.log(`Alarm fired! Count: ${newCount}`)
 
-		// // Store updated count using sync helper method
-		// this.setAlarmCount(newCount)
+		// Store updated count using sync helper method
+		this.setAlarmCount(newCount)
 
-		// // Set next alarm for 1 minute from now
-		// const oneMinute = 60 * 1000
-		// console.log(`Setting next alarm for ${oneMinute}ms from now`)
-		// await this.ctx.storage.setAlarm(Date.now() + oneMinute)
+		// Set next alarm for 1 minute from now
+		const oneMinute = 60 * 1000
+		console.log(`Setting next alarm for ${oneMinute}ms from now`)
+		await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 	}
 
 	/**
