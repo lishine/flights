@@ -91,7 +91,7 @@ export class FlightDO extends DurableObject<Env> {
 		this.setAlarmCount(newCount)
 
 		// Set next alarm for 1 minute from now
-		const oneMinute = 30 * 1000
+		const oneMinute = 120 * 1000
 		console.log(`Setting next alarm for ${oneMinute}ms from now`)
 		await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 	}
