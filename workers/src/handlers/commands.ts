@@ -5,7 +5,7 @@ import { getCurrentIdtTime } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { VERSION } from '../utils/constants'
-import type { Env } from '../index'
+import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
 
 // Helper function to format timestamp for display
@@ -17,7 +17,7 @@ function formatTimestampForDisplay(timestamp: number): string {
 		year: 'numeric',
 		hour: '2-digit',
 		minute: '2-digit',
-		hour12: false
+		hour12: false,
 	})
 }
 
@@ -31,7 +31,7 @@ function isTextMessage(message: Message): message is Message.TextMessage {
 	return 'text' in message
 }
 
-export async function handleCommand(request: Request, env: Env): Promise<Response> {
+export async function handleCommand(request: Request, env: Env, ctx: DurableObjectState): Promise<Response> {
 	const update = (await request.json()) as Update
 
 	if ('callback_query' in update && update.callback_query) {
@@ -66,9 +66,9 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 			const results = []
 			for (const code of flightCodes) {
 				if (isValidFlightCode(code)) {
-					const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), env)
+					const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 					if (flightId) {
-						await addFlightTracking(chatId, flightId, env)
+						await addFlightTracking(chatId, flightId, env, ctx)
 						results.push(`✓ Now tracking ${code.toUpperCase()}`)
 					} else {
 						results.push(`❌ Flight not found: ${code}`)
@@ -98,11 +98,15 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 		let responseText = ''
 		let replyMarkup = null
 		if (data === 'get_flights') {
-			const [lastUpdated, updateCount, dataLength] = await Promise.all([
-				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
-				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
-				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('dataLength').first<{ value: string }>(),
+			const [lastUpdatedResult, updateCountResult, dataLengthResult] = await Promise.all([
+				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
+				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
+				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength'),
 			])
+
+			const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
+			const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
+			const dataLength = dataLengthResult.toArray()[0] as { value: string } | undefined
 
 			if (lastUpdated?.value) {
 				const lastUpdateTimestamp = parseInt(lastUpdated.value)
@@ -118,10 +122,13 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 			}
 			replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Again', callback_data: 'get_flights' }]] }
 		} else if (data === 'get_status') {
-			const [lastUpdated, updateCount] = await Promise.all([
-				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
-				env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
+			const [lastUpdatedResult, updateCountResult] = await Promise.all([
+				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
+				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
 			])
+
+			const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
+			const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
 
 			if (lastUpdated?.value) {
 				const timestamp = parseInt(lastUpdated.value)
@@ -171,12 +178,12 @@ export async function handleCommand(request: Request, env: Env): Promise<Respons
 
 		const commands: { [key: string]: () => Promise<void> } = {
 			'/start': () => handleStart(chatId, env),
-			'/track': () => handleTrack(chatId, text, env),
-			'/tracked': () => handleTracked(chatId, env),
-			'/clear_tracked': () => handleClearTracked(chatId, env),
-			'/test_tracking': () => handleTestTracking(chatId, env),
-			'/flights': () => handleFlights(chatId, env),
-			'/status': () => handleStatus(chatId, env),
+			'/track': () => handleTrack(chatId, text, env, ctx),
+			'/tracked': () => handleTracked(chatId, env, ctx),
+			'/clear_tracked': () => handleClearTracked(chatId, env, ctx),
+			'/test_tracking': () => handleTestTracking(chatId, env, ctx),
+			'/flights': () => handleFlights(chatId, env, ctx),
+			'/status': () => handleStatus(chatId, env, ctx),
 			'/help': () => handleStart(chatId, env),
 		}
 
@@ -215,14 +222,14 @@ async function handleStart(chatId: number, env: Env) {
 	await sendTelegramMessage(chatId, message, env, false, replyMarkup)
 }
 
-async function handleTrack(chatId: number, text: string, env: Env) {
+async function handleTrack(chatId: number, text: string, env: Env, ctx: DurableObjectState) {
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
 	for (const code of flightCodes) {
 		if (isValidFlightCode(code)) {
-			const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), env)
+			const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 			if (flightId) {
-				await addFlightTracking(chatId, flightId, env)
+				await addFlightTracking(chatId, flightId, env, ctx)
 				results.push(`✓ Now tracking ${code.toUpperCase()}`)
 			} else {
 				results.push(`❌ Flight not found: ${code}`)
@@ -234,13 +241,13 @@ async function handleTrack(chatId: number, text: string, env: Env) {
 	await sendTelegramMessage(chatId, results.join('\n'), env)
 }
 
-async function handleTracked(chatId: number, env: Env) {
-	const message = await formatTrackingListOptimized(chatId, env)
+async function handleTracked(chatId: number, env: Env, ctx: DurableObjectState) {
+	const message = await formatTrackingListOptimized(chatId, env, ctx)
 	await sendTelegramMessage(chatId, message, env)
 }
 
-async function handleClearTracked(chatId: number, env: Env) {
-	const clearedCount = await clearUserTracking(chatId, env)
+async function handleClearTracked(chatId: number, env: Env, ctx: DurableObjectState) {
+	const clearedCount = await clearUserTracking(chatId, env, ctx)
 	const message =
 		clearedCount > 0
 			? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.`
@@ -248,18 +255,37 @@ async function handleClearTracked(chatId: number, env: Env) {
 	await sendTelegramMessage(chatId, message, env)
 }
 
-async function handleTestTracking(chatId: number, env: Env) {
-	const suggestions = await suggestFlightsToTrack(chatId, env)
-	const { text, replyMarkup } = formatFlightSuggestions(suggestions)
+async function handleTestTracking(chatId: number, env: Env, ctx: DurableObjectState) {
+	// Call Vercel API directly with next-hours parameter instead of using database
+	const vercelUrl = `https://flights-taupe.vercel.app/api/tlv-arrivals?hours=1`
+	const response = await fetch(vercelUrl)
+	const apiData = (await response.json()) as { Flights: any[] }
+
+	if (!response.ok) {
+		await sendTelegramMessage(chatId, '❌ Error fetching flight data from API', env)
+		return
+	}
+
+	// Get user's currently tracked flights to exclude them from suggestions
+	const trackedFlights = await getUserTrackedFlights(chatId, env, ctx)
+	const trackedFlightIds = new Set(trackedFlights)
+
+	// Filter out already tracked flights and format suggestions
+	const eligibleFlights = apiData.Flights.filter((flight: any) => !trackedFlightIds.has(flight.id))
+	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
 }
 
-async function handleFlights(chatId: number, env: Env) {
-	const [lastUpdated, updateCount, dataLength] = await Promise.all([
-		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
-		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
-		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('dataLength').first<{ value: string }>(),
+async function handleFlights(chatId: number, env: Env, ctx: DurableObjectState) {
+	const [lastUpdatedResult, updateCountResult, dataLengthResult] = await Promise.all([
+		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
+		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
+		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength'),
 	])
+
+	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
+	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
+	const dataLength = dataLengthResult.toArray()[0] as { value: string } | undefined
 
 	let responseText
 	let replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_flights' }]] }
@@ -278,14 +304,18 @@ async function handleFlights(chatId: number, env: Env) {
 	await sendTelegramMessage(chatId, responseText, env, false, replyMarkup)
 }
 
-async function handleStatus(chatId: number, env: Env) {
-	const [lastUpdated, updateCount, errorResult] = await Promise.all([
-		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('lastUpdated').first<{ value: string }>(),
-		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('updateCount').first<{ value: string }>(),
-		env.DB.prepare('SELECT value FROM status WHERE key = ?').bind('last-error').first<{ value: string }>(),
+async function handleStatus(chatId: number, env: Env, ctx: DurableObjectState) {
+	const [lastUpdatedResult, updateCountResult, errorResult] = await Promise.all([
+		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
+		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
+		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error'),
 	])
 
-	const errorData = errorResult?.value
+	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
+	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
+	const errorResultRow = errorResult.toArray()[0] as { value: string } | undefined
+
+	const errorData = errorResultRow?.value
 	let responseText = '📊 *System Status*\n\n'
 	if (lastUpdated?.value) {
 		const timestamp = parseInt(lastUpdated.value)

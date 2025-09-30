@@ -16,6 +16,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Env } from './env'
 import { runScheduledJob } from './handlers/cron'
+import { handleCommand } from './handlers/commands'
 
 export class FlightDO extends DurableObject<Env> {
 	private alarmCount: number = 0
@@ -42,6 +43,11 @@ export class FlightDO extends DurableObject<Env> {
 
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url)
+
+		// Handle webhook commands (Telegram bot commands)
+		if (request.method === 'POST' && url.pathname === '/webhook') {
+			return handleCommand(request, this.env, this.ctx)
+		}
 
 		switch (url.pathname) {
 			case '/status':
@@ -79,7 +85,8 @@ export class FlightDO extends DurableObject<Env> {
 	async alarm(): Promise<void> {
 		console.log('alarm')
 
-		runScheduledJob(this.env)
+		// Pass ctx to runScheduledJob for SQLite access
+		runScheduledJob(this.env, this.ctx)
 
 		// Get current count, increment, and store using sync helper methods
 		const currentCount = this.getAlarmCount()
@@ -90,10 +97,10 @@ export class FlightDO extends DurableObject<Env> {
 		// Store updated count using sync helper method
 		this.setAlarmCount(newCount)
 
-		// Set next alarm for 1 minute from now
-		const oneMinute = 120 * 1000
-		console.log(`Setting next alarm for ${oneMinute}ms from now`)
-		await this.ctx.storage.setAlarm(Date.now() + oneMinute)
+		// Set next alarm for 2 minutes from now
+		const twoMinutes = 60 * 1000
+		console.log(`Setting next alarm for ${twoMinutes}ms from now`)
+		await this.ctx.storage.setAlarm(Date.now() + twoMinutes)
 	}
 
 	/**

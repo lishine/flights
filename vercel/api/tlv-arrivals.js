@@ -18,7 +18,9 @@ function parseTimestamp(dateTimeString) {
 function getCurrentIdtTime() {
   // Create a date object for Israel timezone
   const now = new Date();
-  const israelTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+  const israelTime = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Jerusalem" })
+  );
   return israelTime;
 }
 
@@ -35,8 +37,8 @@ async function getBrowser() {
     ? process.platform === "darwin"
       ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
       : process.platform === "linux"
-      ? "/usr/bin/google-chrome"
-      : "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        ? "/usr/bin/google-chrome"
+        : "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
     : await chromium.executablePath();
 
   // Aggressive performance optimizations
@@ -88,6 +90,18 @@ async function getBrowser() {
 }
 
 export default async function handler(req, res) {
+  // Handle query parameters for filtering flights
+  const { flights, hours } = req.query;
+
+  // If specific flights requested, return only those
+  if (flights) {
+    const flightList = flights.split(",").map((f) => f.trim().toUpperCase());
+    console.log(`Filtering flights: ${flightList.join(", ")}`);
+  }
+
+  // If hours parameter provided, use it instead of default 12 hours
+  const hoursLimit = hours ? parseInt(hours) : 12;
+  console.log(`Hours limit: ${hoursLimit}`);
   let page = null;
 
   try {
@@ -165,9 +179,7 @@ export default async function handler(req, res) {
           const url = response.url();
 
           if (url.includes("FlightBoardSurface/Search")) {
-            console.log(
-              `Found target response`
-            );
+            console.log(`Found target response`);
             clearTimeout(timeout);
             responseReceived = true;
 
@@ -212,41 +224,53 @@ export default async function handler(req, res) {
 
     // Transform flight data to parse timestamps and filter fields
     const nowIdt = getCurrentIdtTime();
-    const twelveHoursFromNow = new Date(nowIdt.getTime() + (12 * 60 * 60 * 1000));
+    const hoursFromNow = new Date(
+      nowIdt.getTime() + hoursLimit * 60 * 60 * 1000
+    );
 
-    const transformedFlights = flightData.Flights?.map(flight => {
-      const scheduledArrival = parseTimestamp(flight.ScheduledDateTime);
-      const estimatedArrival = parseTimestamp(flight.UpdatedDateTime);
+    const transformedFlights =
+      flightData.Flights?.map((flight) => {
+        const scheduledArrival = parseTimestamp(flight.ScheduledDateTime);
+        const estimatedArrival = parseTimestamp(flight.UpdatedDateTime);
 
-      // Generate composite ID from flight number and scheduled arrival time
-      const flightId = `${flight.Flight.replace(' ', '')}_${scheduledArrival ?? 'unknown'}`;
+        // Generate composite ID from flight number and scheduled arrival time
+        const flightId = `${flight.Flight.replace(" ", "")}_${scheduledArrival ?? "unknown"}`;
 
-      return {
-        id: flightId,
-        flight_number: flight.Flight.replace(' ', ''),
-        status: flight.Status,
-        scheduled_arrival_time: scheduledArrival,
-        estimated_arrival_time: estimatedArrival,
-        city: flight.City,
-        airline: flight.Airline,
-        created_at: nowIdt.getTime(),
-        updated_at: nowIdt.getTime(),
-      };
-    })
-    .filter(flight => {
-      // Filter out canceled and landed flights
-      if (flight.status === 'CANCELED' || flight.status === 'LANDED') {
+        return {
+          id: flightId,
+          flight_number: flight.Flight.replace(" ", ""),
+          status: flight.Status,
+          scheduled_arrival_time: scheduledArrival,
+          estimated_arrival_time: estimatedArrival,
+          city: flight.City,
+          airline: flight.Airline,
+          created_at: nowIdt.getTime(),
+          updated_at: nowIdt.getTime(),
+        };
+      }).filter((flight) => {
+        // Filter out canceled and landed flights
+        if (flight.status === "CANCELED" || flight.status === "LANDED") {
+          return false;
+        }
+
+        // If specific flights requested, only return those
+        if (flights) {
+          const flightList = flights
+            .split(",")
+            .map((f) => f.trim().toUpperCase());
+          if (!flightList.includes(flight.flight_number.toUpperCase())) {
+            return false;
+          }
+        }
+
+        // Filter to only next hoursLimit hours flights
+        if (flight.scheduled_arrival_time) {
+          const scheduledTime = new Date(flight.scheduled_arrival_time);
+          return scheduledTime >= nowIdt && scheduledTime <= hoursFromNow;
+        }
+
         return false;
-      }
-
-      // Filter to only next 12 hours flights
-      if (flight.scheduled_arrival_time) {
-        const scheduledTime = new Date(flight.scheduled_arrival_time);
-        return scheduledTime >= nowIdt && scheduledTime <= twelveHoursFromNow;
-      }
-
-      return false;
-    }) || [];
+      }) || [];
 
     res.status(200).json({
       Flights: transformedFlights,

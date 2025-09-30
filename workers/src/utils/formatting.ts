@@ -1,7 +1,6 @@
-
 import { getUserTrackedFlightsWithData } from '../services/tracking'
 import { getCurrentIdtTime } from './dateTime'
-import type { Env } from '../index'
+import type { Env } from '../env'
 import type { D1Flight } from '../types'
 
 // Helper function to format time from timestamp
@@ -10,7 +9,7 @@ function formatTimeFromTimestamp(timestamp: number): string {
 	return date.toLocaleTimeString('en-GB', {
 		hour: '2-digit',
 		minute: '2-digit',
-		hour12: false
+		hour12: false,
 	})
 }
 
@@ -45,8 +44,8 @@ export async function formatTrackingList(userFlights: string[], env: Env): Promi
 }
 
 // New optimized version that takes chatId directly
-export async function formatTrackingListOptimized(chatId: number, env: Env): Promise<string> {
-	const flights = await getUserTrackedFlightsWithData(chatId, env)
+export async function formatTrackingListOptimized(chatId: number, env: Env, ctx: DurableObjectState): Promise<string> {
+	const flights = await getUserTrackedFlightsWithData(chatId, env, ctx)
 
 	if (flights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
 

@@ -13,7 +13,9 @@ export default {
 		// Get durable object instance by name (using pathname as the name)
 
 		if (request.method === 'POST' && url.pathname === '/webhook') {
-			return handleCommand(request, env)
+			// Get Durable Object instance and forward the request for command processing
+			const dbStub = env.FLIGHTS_DO.getByName('alarm')
+			return dbStub.fetch(request)
 		}
 
 		// For testing durable object endpoints

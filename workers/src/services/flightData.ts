@@ -1,7 +1,6 @@
-
 import { fetchVercel } from '../utils/validation'
 import { getCurrentIdtTime } from '../utils/dateTime'
-import type { Env } from '../index'
+import type { Env } from '../env'
 import type { D1Flight } from '../types'
 
 // Convert timestamp to Date object
@@ -10,61 +9,72 @@ function getIdtDateTime(timestamp: number | null): Date | null {
 	return new Date(timestamp)
 }
 
-export async function getCurrentFlights(env: Env): Promise<D1Flight[]> {
-	const { results } = await env.DB.prepare(
-		'SELECT * FROM flights ORDER BY estimated_arrival_time DESC'
-	).all<D1Flight>()
+export async function getCurrentFlights(ctx: DurableObjectState): Promise<D1Flight[]> {
+	const result = ctx.storage.sql.exec('SELECT * FROM flights ORDER BY estimated_arrival_time DESC')
+	const results = result.toArray() as unknown as D1Flight[]
+
 	if (!results || results.length === 0) {
-		console.error('No flight data available in D1')
+		console.error('No flight data available in SQLite')
 		throw new Error('Flight data unavailable')
 	}
-	console.log('Using D1 flight data')
+	console.log('Using Durable Object SQLite flight data')
 	return results
 }
 
-export async function getCurrentFlightData(flightNumber: string, env: Env): Promise<D1Flight | undefined> {
-	const { results } = await env.DB.prepare(
-		'SELECT * FROM flights WHERE flight_number = ? ORDER BY estimated_arrival_time ASC'
+export async function getCurrentFlightData(
+	flightNumber: string,
+	ctx: DurableObjectState
+): Promise<D1Flight | undefined> {
+	const result = ctx.storage.sql.exec(
+		'SELECT * FROM flights WHERE flight_number = ? ORDER BY estimated_arrival_time ASC',
+		flightNumber
 	)
-		.bind(flightNumber)
-		.all<D1Flight>()
+	const results = result.toArray() as unknown as D1Flight[]
 	return results?.[0]
 }
 
-export async function getNextFutureFlight(flightNumber: string, env: Env): Promise<D1Flight | undefined> {
+export async function getNextFutureFlight(
+	flightNumber: string,
+	ctx: DurableObjectState
+): Promise<D1Flight | undefined> {
 	const nowIdt = getCurrentIdtTime()
-	const { results } = await env.DB.prepare(
-		'SELECT * FROM flights WHERE flight_number = ? AND estimated_arrival_time > ? ORDER BY estimated_arrival_time ASC'
+	const result = ctx.storage.sql.exec(
+		'SELECT * FROM flights WHERE flight_number = ? AND estimated_arrival_time > ? ORDER BY estimated_arrival_time ASC',
+		flightNumber,
+		nowIdt.getTime()
 	)
-		.bind(flightNumber, nowIdt.getTime())
-		.all<D1Flight>()
+	const results = result.toArray() as unknown as D1Flight[]
 	return results?.[0]
 }
 
-export async function getFlightIdByNumber(flightNumber: string, env: Env): Promise<string | undefined> {
+export async function getFlightIdByNumber(flightNumber: string, ctx: DurableObjectState): Promise<string | undefined> {
 	// First try to get the next future flight
-	const futureFlight = await getNextFutureFlight(flightNumber, env)
+	const futureFlight = await getNextFutureFlight(flightNumber, ctx)
 	if (futureFlight) {
 		return futureFlight.id
 	}
 
 	// If no future flight found, fall back to the soonest arrival (including past ones)
-	const flight = await getCurrentFlightData(flightNumber, env)
+	const flight = await getCurrentFlightData(flightNumber, ctx)
 	return flight?.id
 }
 
-export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D1Flight[]> {
+export async function suggestFlightsToTrack(chatId: number, env: Env, ctx: DurableObjectState): Promise<D1Flight[]> {
 	console.log('suggestFlightsToTrack')
-	const [currentFlights, trackedFlights] = await Promise.all([
-		getCurrentFlights(env),
-		env.DB.prepare('SELECT flight_id FROM subscriptions WHERE telegram_id = ? AND auto_cleanup_at IS NULL')
-			.bind(String(chatId))
-			.all<{ flight_id: string }>(),
+
+	const [currentFlights, trackedFlightsResult] = await Promise.all([
+		getCurrentFlights(ctx),
+		ctx.storage.sql.exec(
+			'SELECT flight_id FROM subscriptions WHERE telegram_id = ? AND auto_cleanup_at IS NULL',
+			String(chatId)
+		),
 	])
 
+	const trackedFlights = trackedFlightsResult.toArray() as unknown as { flight_id: string }[]
+
 	const nowIdt = getCurrentIdtTime()
-	const trackedFlightIds = new Set((trackedFlights.results || []).map((f) => f.flight_id))
-	console.log({ trackedFlights: trackedFlights.results, trackedFlightIds: trackedFlightIds.size })
+	const trackedFlightIds = new Set(trackedFlights.map((f) => f.flight_id))
+	console.log({ trackedFlights, trackedFlightIds: trackedFlightIds.size })
 
 	const eligibleFlights = currentFlights.filter((flight) => {
 		// Skip if already tracked
@@ -92,27 +102,23 @@ export async function suggestFlightsToTrack(chatId: number, env: Env): Promise<D
 		.slice(0, 5)
 }
 
-export async function cleanupCompletedFlights(currentFlights: D1Flight[], env: Env) {
+export async function cleanupCompletedFlights(currentFlights: D1Flight[], env: Env, ctx: DurableObjectState) {
 	const nowIdt = getCurrentIdtTime()
-	const cutoffIdt = new Date(nowIdt.getTime() - (2 * 60 * 60 * 1000)) // 2 hours ago
+	const cutoffIdt = new Date(nowIdt.getTime() - 2 * 60 * 60 * 1000) // 2 hours ago
 	console.log(`Cleanup: cutoff=${cutoffIdt.toLocaleString()}`)
 
 	for (const flight of currentFlights) {
 		const arrivalIdt = getIdtDateTime(flight.estimated_arrival_time)
 		if (!arrivalIdt) continue
 		if (flight.status === 'LANDED' && arrivalIdt < cutoffIdt) {
-			console.log(
-				`Cleaning up landed flight: ${flight.flight_number}, arrived at ${arrivalIdt.toLocaleString()}`
-			)
-			// Delete from D1
-			await env.DB.prepare('DELETE FROM flights WHERE id = ?').bind(flight.id).run()
-			// Also clean up tracking data (assuming tracking data is still in KV for now, or will be migrated later)
+			console.log(`Cleaning up landed flight: ${flight.flight_number}, arrived at ${arrivalIdt.toLocaleString()}`)
+			// Delete from Durable Object SQLite
+			ctx.storage.sql.exec('DELETE FROM flights WHERE id = ?', flight.id)
 			// Clean up completed flights from subscriptions table
-			await env.DB.prepare(
-				"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_id = ? AND auto_cleanup_at IS NULL"
+			ctx.storage.sql.exec(
+				"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_id = ? AND auto_cleanup_at IS NULL",
+				flight.id
 			)
-				.bind(flight.id)
-				.run()
 		}
 	}
 }
@@ -139,55 +145,42 @@ export function detectChanges(prevFlight: D1Flight, currentFlight: D1Flight): st
 	return changes
 }
 
-export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
+export async function fetchLatestFlights(env: Env, ctx: DurableObjectState): Promise<D1Flight[]> {
 	const response = await fetchVercel('https://flights-taupe.vercel.app/api/tlv-arrivals')
 	const rawData = (await response.json()) as { Flights: D1Flight[] }
 	console.log('API data sample:', JSON.stringify(rawData.Flights.slice(0, 2), null, 2))
 
-	// Initialize or update status table with metadata
-	await env.DB.prepare(
-		`
-		INSERT INTO status (key, value)
-		VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-		`
+	// Initialize or update status table with metadata using Durable Object SQLite
+	ctx.storage.sql.exec(
+		'INSERT INTO status (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value',
+		'lastUpdated',
+		Date.now().toString()
 	)
-		.bind('lastUpdated', Date.now().toString())
-		.run()
 
-	await env.DB.prepare(
-		`
-		INSERT INTO status (key, value)
-		VALUES (?, '1')
-		ON CONFLICT(key) DO UPDATE SET value = CAST((CAST(value AS INTEGER) + 1) AS TEXT)
-		`
+	ctx.storage.sql.exec(
+		"INSERT INTO status (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = CAST((CAST(value AS INTEGER) + 1) AS TEXT)",
+		'updateCount'
 	)
-		.bind('updateCount')
-		.run()
 
-	await env.DB.prepare(
-		`
-		INSERT INTO status (key, value)
-		VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-		`
+	ctx.storage.sql.exec(
+		'INSERT INTO status (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value',
+		'dataLength',
+		rawData.Flights.length.toString()
 	)
-		.bind('dataLength', rawData.Flights.length.toString())
-		.run()
 
 	const newFlights: D1Flight[] = rawData.Flights
 
-	const statements = newFlights.map((flight) =>
-		env.DB.prepare(
+	// Use individual INSERT OR REPLACE statements instead of batch for Durable Object SQLite
+	for (const flight of newFlights) {
+		ctx.storage.sql.exec(
 			`INSERT INTO flights (id, flight_number, status, scheduled_arrival_time, estimated_arrival_time, city, airline, created_at, updated_at)
-			          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			          ON CONFLICT(flight_number, scheduled_arrival_time) DO UPDATE SET
-			          status = EXCLUDED.status,
-			          estimated_arrival_time = EXCLUDED.estimated_arrival_time,
-			          city = EXCLUDED.city,
-			          airline = EXCLUDED.airline,
-			          updated_at = EXCLUDED.updated_at;`
-		).bind(
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(flight_number, scheduled_arrival_time) DO UPDATE SET
+			 status = EXCLUDED.status,
+			 estimated_arrival_time = EXCLUDED.estimated_arrival_time,
+			 city = EXCLUDED.city,
+			 airline = EXCLUDED.airline,
+			 updated_at = EXCLUDED.updated_at`,
 			flight.id,
 			flight.flight_number,
 			flight.status,
@@ -198,8 +191,7 @@ export async function fetchLatestFlights(env: Env): Promise<D1Flight[]> {
 			flight.created_at,
 			flight.updated_at
 		)
-	)
-	await env.DB.batch(statements)
+	}
 
 	return newFlights
 }
