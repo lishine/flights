@@ -24,7 +24,7 @@ export default {
 			// const greeting = 'ggg'
 			// return new Response(`OK ${greeting}`, { status: 200 })
 		} else {
-			console.log('22')
+			console.log('22_')
 			// 	const stub = env.FLIGHTS_DO.getByName('alarm')
 
 			// const greeting = await stub.sayHello()
