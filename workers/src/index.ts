@@ -17,9 +17,11 @@ export default {
 
 		// For testing durable object endpoints
 		if (url.pathname.startsWith('/alarm/')) {
-			const stub = env.FLIGHTS_DO.getByName('alarm')
+			// const stub = env.FLIGHTS_DO.getByName('alarm')
 			// Forward request to durable object
-			return await stub.fetch(request)
+			// return await stub.fetch(request)
+			const greeting = 'ggg'
+			return new Response(`OK ${greeting}`, { status: 200 })
 		} else {
 			// 	const stub = env.FLIGHTS_DO.getByName('alarm')
 
