@@ -15,6 +15,7 @@
  */
 import { DurableObject } from 'cloudflare:workers'
 import { Env } from './env'
+import { runScheduledJob } from './handlers/cron'
 
 export class FlightDO extends DurableObject<Env> {
 	private alarmCount: number = 0
@@ -77,6 +78,9 @@ export class FlightDO extends DurableObject<Env> {
 	 */
 	async alarm(): Promise<void> {
 		console.log('alarm')
+
+		runScheduledJob(this.env)
+
 		// Get current count, increment, and store using sync helper methods
 		const currentCount = this.getAlarmCount()
 		const newCount = currentCount + 1
@@ -87,7 +91,7 @@ export class FlightDO extends DurableObject<Env> {
 		this.setAlarmCount(newCount)
 
 		// Set next alarm for 1 minute from now
-		const oneMinute = 5 * 1000
+		const oneMinute = 30 * 1000
 		console.log(`Setting next alarm for ${oneMinute}ms from now`)
 		await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 	}

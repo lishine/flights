@@ -32,9 +32,4 @@ export default {
 			return new Response(`OK ${greeting}`, { status: 200 })
 		}
 	},
-
-	// async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<Response> {
-	// console.log('-11')
-	// return runScheduledJob(env, ctx)
-	// },
 }
