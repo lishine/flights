@@ -20,6 +20,7 @@ export class FlightDO extends DurableObject<Env> {
 	private alarmCount: number = 0
 
 	constructor(ctx: DurableObjectState, env: Env) {
+		console.log('constructor')
 		super(ctx, env)
 
 		// Use blockConcurrencyWhile() to ensure no requests are delivered until initialization completes
@@ -74,6 +75,7 @@ export class FlightDO extends DurableObject<Env> {
 	 * Uses SQLite-backed synchronous KV API for all storage operations
 	 */
 	async alarm(): Promise<void> {
+		console.log('alarm')
 		// Get current count, increment, and store using sync helper methods
 		const currentCount = this.getAlarmCount()
 		const newCount = currentCount + 1

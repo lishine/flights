@@ -1,5 +1,4 @@
 import { handleCommand } from './handlers/commands'
-import { runScheduledJob } from './handlers/cron'
 import { FlightDO } from './durable'
 import { Env } from './env'
 
