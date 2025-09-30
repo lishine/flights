@@ -1,7 +1,7 @@
 /**
  * FlightDO - SQLite-backed Durable Object using Cloudflare's Synchronous KV API
  *
- * This class uses:
+ * This class uses SYNCHRONOUS KV API throughout:
  * - SQLite-backed storage (recommended, replaces obsolete KV backend)
  * - blockConcurrencyWhile() for proper initialization
  * - Synchronous KV API methods (ctx.storage.kv.get, ctx.storage.kv.put, ctx.storage.kv.delete)
@@ -24,7 +24,7 @@ export class FlightDO extends DurableObject<Env> {
 
 		// Use blockConcurrencyWhile() to ensure no requests are delivered until initialization completes
 		ctx.blockConcurrencyWhile(async () => {
-			// Initialize alarm count using synchronous KV API
+			// Initialize alarm count using synchronous KV API directly
 			this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
 
 			// Set up initial alarm if not already set
@@ -42,15 +42,15 @@ export class FlightDO extends DurableObject<Env> {
 
 		switch (url.pathname) {
 			case '/status':
-				// Get fresh count from storage to ensure consistency across instances
-				const count = (await this.ctx.storage.get<number>('alarmCount')) || 0
+				// Get fresh count using synchronous helper method
+				const count = this.getAlarmCount()
 				return new Response(`FlightDO Status - Alarms fired: ${count}`, {
 					headers: { 'Content-Type': 'text/plain' },
 				})
 
 			case '/reset':
-				// Reset counter and set new alarm
-				await this.ctx.storage.put('alarmCount', 0)
+				// Reset counter and set new alarm using sync helper method
+				this.setAlarmCount(0)
 				const oneMinute = 60 * 1000
 				await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 				return new Response('Alarm count reset and new alarm set', {
@@ -61,7 +61,7 @@ export class FlightDO extends DurableObject<Env> {
 				// Return current status with fresh count from storage
 				const currentAlarm = await this.ctx.storage.getAlarm()
 				const alarmTime = currentAlarm ? new Date(currentAlarm).toISOString() : 'Not set'
-				const currentCount = (await this.ctx.storage.get<number>('alarmCount')) || 0
+				const currentCount = this.getAlarmCount()
 
 				return new Response(`FlightDO Active\nAlarms fired: ${currentCount}\nNext alarm: ${alarmTime}`, {
 					headers: { 'Content-Type': 'text/plain' },
@@ -71,17 +71,17 @@ export class FlightDO extends DurableObject<Env> {
 
 	/**
 	 * Alarm handler - automatically called by Cloudflare runtime when alarm fires
-	 * Uses SQLite-backed async storage API for alarms and async operations
+	 * Uses SQLite-backed synchronous KV API for all storage operations
 	 */
 	async alarm(): Promise<void> {
-		// Get current count from storage, increment, and store atomically
-		const currentCount = (await this.ctx.storage.get<number>('alarmCount')) || 0
+		// Get current count, increment, and store using sync helper methods
+		const currentCount = this.getAlarmCount()
 		const newCount = currentCount + 1
 
 		console.log(`Alarm fired! Count: ${newCount}`)
 
-		// Store updated count using async API
-		await this.ctx.storage.put('alarmCount', newCount)
+		// Store updated count using sync helper method
+		this.setAlarmCount(newCount)
 
 		// Set next alarm for 1 minute from now
 		const oneMinute = 60 * 1000
@@ -102,8 +102,8 @@ export class FlightDO extends DurableObject<Env> {
 	 * Storage API demonstration methods using SQLite-backed synchronous KV API
 	 * These methods show proper usage of the synchronous key-value storage API
 	 *
-	 * Note: Helper methods use sync API (ctx.storage.kv.*) for simple operations
-	 * while alarm/storage operations use async API (ctx.storage.*) for consistency
+	 * ALL methods use synchronous KV API (ctx.storage.kv.*) for consistency
+	 * Only alarm operations use async API (ctx.storage.setAlarm, ctx.storage.getAlarm)
 	 */
 
 	/** Get value from storage using synchronous KV API (returns undefined if not found) */
@@ -131,5 +131,15 @@ export class FlightDO extends DurableObject<Env> {
 		limit?: number
 	}): Iterable<[string, unknown]> {
 		return this.ctx.storage.kv.list(options)
+	}
+
+	/** Get alarm count using synchronous KV API */
+	getAlarmCount(): number {
+		return this.ctx.storage.kv.get<number>('alarmCount') || 0
+	}
+
+	/** Set alarm count using synchronous KV API */
+	setAlarmCount(count: number): void {
+		this.ctx.storage.kv.put('alarmCount', count)
 	}
 }

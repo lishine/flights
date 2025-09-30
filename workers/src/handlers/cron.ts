@@ -1,12 +1,11 @@
 import { fetchLatestFlights, cleanupCompletedFlights, getCurrentFlights, detectChanges } from '../services/flightData'
 import { getCurrentIdtTime } from '../utils/dateTime'
 import { sendFlightAlerts } from './alerts'
-import type { Env } from '../index'
+import type { Env } from '../env'
 import type { D1Flight } from '../types'
 
 export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<Response> {
 	try {
-		
 		// Get update counter from status table
 		const counterResult = await env.DB.prepare('SELECT value FROM status WHERE key = ?')
 			.bind('update-counter')
@@ -16,16 +15,11 @@ export async function runScheduledJob(env: Env, ctx: ExecutionContext): Promise<
 		const { results: previousFlights } = await env.DB.prepare(
 			'SELECT * FROM flights ORDER BY updated_at DESC'
 		).all<D1Flight>()
-		const previousFlightsMap = Object.fromEntries(
-    		previousFlights.map(f => [f.id, f])
-		) as Record<string, D1Flight>
+		const previousFlightsMap = Object.fromEntries(previousFlights.map((f) => [f.id, f])) as Record<string, D1Flight>
 
 		// Fetch new flights from API and update D1 flights table
 		const currentFlights = await fetchLatestFlights(env)
-		const currentFlightsMap = Object.fromEntries(
-    		currentFlights.map(f => [f.id, f])
-		) as Record<string, D1Flight>
-
+		const currentFlightsMap = Object.fromEntries(currentFlights.map((f) => [f.id, f])) as Record<string, D1Flight>
 
 		// Detect changes and prepare alerts
 		const changesByFlight: Record<string, { flight: D1Flight; changes: string[] }> = {}

@@ -11,11 +11,10 @@ The FlightDO durable object has been set up with alarm functionality that trigge
 - **Initialization**: Uses `blockConcurrencyWhile()` for proper initialization
 - **API Used**: Official Cloudflare Durable Objects SQLite Storage API
 - **Features**:
-    - Alarms API (`getAlarm()`, `setAlarm()`) - Async operations
-    - **Synchronous KV Storage API** (`ctx.storage.kv.get()`, `ctx.storage.kv.put()`, `ctx.storage.kv.delete()`) - Sync operations for simple ops
-    - Async Storage API (`ctx.storage.get()`, `ctx.storage.put()`) - For alarm handlers and complex operations
-    - SQL API (`ctx.storage.sql.exec()`) - stored in hidden `__cf_kv` table
-    - Point-in-Time Recovery (PITR) support
+  - Alarms API (`getAlarm()`, `setAlarm()`) - Async operations
+  - **Synchronous KV Storage API** (`ctx.storage.kv.get()`, `ctx.storage.kv.put()`, `ctx.storage.kv.delete()`) - ALL storage operations use sync API
+  - SQL API (`ctx.storage.sql.exec()`) - stored in hidden `__cf_kv` table
+  - Point-in-Time Recovery (PITR) support
 - **Reference**: https://developers.cloudflare.com/durable-objects/api/storage-api/
 
 ## Manual Testing
