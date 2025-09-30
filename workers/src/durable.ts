@@ -31,6 +31,7 @@ export class FlightDO extends DurableObject<Env> {
 			// Set up initial alarm if not already set
 			let currentAlarm = await ctx.storage.getAlarm()
 			if (currentAlarm == null) {
+				console.log('constructor currentAlarm == null')
 				const oneMinute = 60 * 1000 // 1 minute in milliseconds
 				console.log(`Setting initial alarm for ${oneMinute}ms from now`)
 				await ctx.storage.setAlarm(Date.now() + oneMinute)
@@ -52,8 +53,8 @@ export class FlightDO extends DurableObject<Env> {
 			case '/reset':
 				// Reset counter and set new alarm using sync helper method
 				this.setAlarmCount(0)
-				const oneMinute = 60 * 1000
-				await this.ctx.storage.setAlarm(Date.now() + oneMinute)
+				// const oneMinute = 60 * 1000
+				// await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 				return new Response('Alarm count reset and new alarm set', {
 					headers: { 'Content-Type': 'text/plain' },
 				})
@@ -86,7 +87,7 @@ export class FlightDO extends DurableObject<Env> {
 		this.setAlarmCount(newCount)
 
 		// Set next alarm for 1 minute from now
-		const oneMinute = 60 * 1000
+		const oneMinute = 5 * 1000
 		console.log(`Setting next alarm for ${oneMinute}ms from now`)
 		await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 	}

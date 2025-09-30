@@ -7,6 +7,7 @@ export { FlightDO }
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+		const stub = env.FLIGHTS_DO.getByName('alarm')
 		console.log('00')
 		const url = new URL(request.url)
 		// Get durable object instance by name (using pathname as the name)
@@ -18,7 +19,6 @@ export default {
 		// For testing durable object endpoints
 		if (url.pathname.startsWith('/alarm/')) {
 			console.log('11')
-			const stub = env.FLIGHTS_DO.getByName('alarm')
 			return await stub.fetch(request)
 			// const greeting = 'ggg'
 			// return new Response(`OK ${greeting}`, { status: 200 })
