@@ -8,6 +8,7 @@ export { FlightDO }
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+		console.log('0')
 		const url = new URL(request.url)
 		// Get durable object instance by name (using pathname as the name)
 
@@ -17,12 +18,14 @@ export default {
 
 		// For testing durable object endpoints
 		if (url.pathname.startsWith('/alarm/')) {
+			console.log('1')
 			// const stub = env.FLIGHTS_DO.getByName('alarm')
 			// Forward request to durable object
 			// return await stub.fetch(request)
 			const greeting = 'ggg'
 			return new Response(`OK ${greeting}`, { status: 200 })
 		} else {
+			console.log('2')
 			// 	const stub = env.FLIGHTS_DO.getByName('alarm')
 
 			// const greeting = await stub.sayHello()
@@ -33,6 +36,7 @@ export default {
 	},
 
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<Response> {
+		console.log('-1')
 		return runScheduledJob(env, ctx)
 	},
 }
