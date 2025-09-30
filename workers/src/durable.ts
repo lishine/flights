@@ -1,12 +1,13 @@
 /**
- * FlightDO - SQLite-backed Durable Object using Cloudflare's new SQLite API
+ * FlightDO - SQLite-backed Durable Object using Cloudflare's Synchronous KV API
  *
  * This class uses:
  * - SQLite-backed storage (recommended, replaces obsolete KV backend)
  * - blockConcurrencyWhile() for proper initialization
- * - Synchronous KV API methods via ctx.storage.kv.*
+ * - Synchronous KV API methods (ctx.storage.kv.get, ctx.storage.kv.put, ctx.storage.kv.delete)
  * - SQL API via ctx.storage.sql
  * - Point-in-Time Recovery support
+ * - Proper alarm counter synchronization across instances
  *
  * Migration configured in wrangler.toml with new_sqlite_classes = ["FlightDO"]
  *
@@ -23,7 +24,7 @@ export class FlightDO extends DurableObject<Env> {
 
 		// Use blockConcurrencyWhile() to ensure no requests are delivered until initialization completes
 		ctx.blockConcurrencyWhile(async () => {
-			// Initialize instance variables using SQLite-backed synchronous KV API
+			// Initialize alarm count using synchronous KV API
 			this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
 
 			// Set up initial alarm if not already set
@@ -41,14 +42,15 @@ export class FlightDO extends DurableObject<Env> {
 
 		switch (url.pathname) {
 			case '/status':
-				return new Response(`FlightDO Status - Alarms fired: ${this.alarmCount}`, {
+				// Get fresh count from storage to ensure consistency across instances
+				const count = (await this.ctx.storage.get<number>('alarmCount')) || 0
+				return new Response(`FlightDO Status - Alarms fired: ${count}`, {
 					headers: { 'Content-Type': 'text/plain' },
 				})
 
 			case '/reset':
 				// Reset counter and set new alarm
-				this.alarmCount = 0
-				this.ctx.storage.kv.put('alarmCount', 0)
+				await this.ctx.storage.put('alarmCount', 0)
 				const oneMinute = 60 * 1000
 				await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 				return new Response('Alarm count reset and new alarm set', {
@@ -56,11 +58,12 @@ export class FlightDO extends DurableObject<Env> {
 				})
 
 			default:
-				// Return current status (alarm count already initialized in constructor)
+				// Return current status with fresh count from storage
 				const currentAlarm = await this.ctx.storage.getAlarm()
 				const alarmTime = currentAlarm ? new Date(currentAlarm).toISOString() : 'Not set'
+				const currentCount = (await this.ctx.storage.get<number>('alarmCount')) || 0
 
-				return new Response(`FlightDO Active\nAlarms fired: ${this.alarmCount}\nNext alarm: ${alarmTime}`, {
+				return new Response(`FlightDO Active\nAlarms fired: ${currentCount}\nNext alarm: ${alarmTime}`, {
 					headers: { 'Content-Type': 'text/plain' },
 				})
 		}
@@ -68,15 +71,17 @@ export class FlightDO extends DurableObject<Env> {
 
 	/**
 	 * Alarm handler - automatically called by Cloudflare runtime when alarm fires
-	 * Uses SQLite-backed synchronous KV API methods
+	 * Uses SQLite-backed async storage API for alarms and async operations
 	 */
 	async alarm(): Promise<void> {
-		// Increment counter and log (using SQLite-backed synchronous KV API)
-		this.alarmCount++
-		console.log(`Alarm fired! Count: ${this.alarmCount}`)
+		// Get current count from storage, increment, and store atomically
+		const currentCount = (await this.ctx.storage.get<number>('alarmCount')) || 0
+		const newCount = currentCount + 1
 
-		// Store updated count using synchronous KV API
-		this.ctx.storage.kv.put('alarmCount', this.alarmCount)
+		console.log(`Alarm fired! Count: ${newCount}`)
+
+		// Store updated count using async API
+		await this.ctx.storage.put('alarmCount', newCount)
 
 		// Set next alarm for 1 minute from now
 		const oneMinute = 60 * 1000
@@ -96,6 +101,9 @@ export class FlightDO extends DurableObject<Env> {
 	/**
 	 * Storage API demonstration methods using SQLite-backed synchronous KV API
 	 * These methods show proper usage of the synchronous key-value storage API
+	 *
+	 * Note: Helper methods use sync API (ctx.storage.kv.*) for simple operations
+	 * while alarm/storage operations use async API (ctx.storage.*) for consistency
 	 */
 
 	/** Get value from storage using synchronous KV API (returns undefined if not found) */
