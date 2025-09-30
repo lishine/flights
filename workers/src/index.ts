@@ -1,6 +1,10 @@
 import { handleCommand } from './handlers/commands'
 import { runScheduledJob } from './handlers/cron'
+import { FlightDO } from './durable'
 import { Env } from './env'
+
+// Export the Durable Object class so the runtime can find it
+export { FlightDO }
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
