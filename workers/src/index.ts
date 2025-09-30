@@ -1,22 +1,26 @@
 import { handleCommand } from './handlers/commands'
 import { runScheduledJob } from './handlers/cron'
-
-export interface Env {
-	BOT_TOKEN: string
-	DB: D1Database
-}
+import { Env } from './env'
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url)
+		// Get durable object instance by name (using pathname as the name)
+		const stub = env.FLIGHTS_DO.getByName(new URL(request.url).pathname)
 
 		if (request.method === 'POST' && url.pathname === '/webhook') {
 			return handleCommand(request, env)
-		} else {
-			console.log('runScheduledJob')
-			runScheduledJob(env, ctx)
 		}
-		return new Response('OOK', { status: 200 })
+
+		// For testing durable object endpoints
+		if (url.pathname.startsWith('/do/')) {
+			// Forward request to durable object
+			return await stub.fetch(request)
+		}
+
+		const greeting = await stub.sayHello()
+
+		return new Response(`OK ${greeting}`, { status: 200 })
 	},
 
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<Response> {
