@@ -2,7 +2,7 @@ name = "flights"
 main = "dist/worker.js"
 compatibility_date = "2025-09-24"
 observability = { enabled = true }
-triggers = { crons = ["*/2 * * * *"] }
+# triggers = { crons = ["*/2 * * * *"] }
 # [[kv_namespaces]]
 # binding = "FLIGHT_DATA"
 # id = "154a282737544f8792497759d05f0771"
