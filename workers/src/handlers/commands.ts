@@ -130,9 +130,10 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				const minutesAgo = Math.floor(timeDiff / 60000)
 				statusSection +=
 					`✅ System: Online\n\n` +
-					`⏱️ Last update: ${minutesAgo} minutes ago\n\n` +
-					`🔢 Total fetches: ${updateCount?.value || 0}\n\n` +
-					`📦 Version: ${versionData.version}`
+					`⏱️ Last update: ${minutesAgo} minutes ago\n` +
+					`🔢 Total fetches: ${updateCount?.value || 0}\n` +
+					`📦 Version: ${versionData.version}\n` +
+					`📦 Code updated: ${versionData.update_date}\n`
 			} else {
 				statusSection += '🔶 System: Starting up'
 			}
@@ -193,7 +194,9 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			(() =>
 				sendTelegramMessage(
 					chatId,
-					`Unknown command.\nCurrent version: ${JSON.stringify(versionData, null, 2)}`,
+					`Unknown command.\n` +
+						`📦 Version: ${versionData.version}\n` +
+						`📦 Code updated: ${versionData.update_date}\n`,
 					env
 				))
 		await handler()

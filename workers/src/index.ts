@@ -14,6 +14,9 @@ export default {
 			return dbStub.fetch(request)
 		}
 
-		return await stub.fetch(request)
+		if (request.method === 'GET' && url.pathname === '/reset-schema') {
+			return await stub.fetch(request)
+		}
+		return new Response(`OK`, { status: 200 })
 	},
 }
