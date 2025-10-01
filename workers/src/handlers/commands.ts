@@ -30,6 +30,63 @@ export const isTextMessage = (message: Message) => {
 	return 'text' in message
 }
 
+// Shared function to build status message - eliminates code duplication
+const buildStatusMessage = (ctx: DurableObjectState) => {
+	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
+	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
+	const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
+	const errorResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
+
+	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
+	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
+	const dataLength = dataLengthResult.toArray()[0] as { value: string } | undefined
+	const errorResultRow = errorResult.toArray()[0] as { value: string } | undefined
+
+	const errorData = errorResultRow?.value
+
+	// Build flight data section
+	let flightDataSection = ''
+	if (lastUpdated?.value) {
+		const lastUpdateTimestamp = parseInt(lastUpdated.value)
+		const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
+		flightDataSection =
+			`🛩️ *Latest Flight Data*\n\n` +
+			`📅 Updated: ${lastUpdate}\n` +
+			`🔢 Total fetches: ${updateCount?.value || 'N/A'}\n` +
+			`📊 Flights count: ${dataLength?.value || 'N/A'}\n\n`
+	} else {
+		flightDataSection = '❌ No flight data available yet\n\n'
+	}
+
+	// Build system status section
+	let statusSection = '📊 *System Status*\n\n'
+	if (lastUpdated?.value) {
+		const timestamp = parseInt(lastUpdated.value)
+		const nowIsrael = getCurrentIdtTime().getTime()
+		const timeDiff = nowIsrael - timestamp
+		const minutesAgo = Math.floor(timeDiff / 60000)
+		statusSection +=
+			`✅ System: Online\n\n` +
+			`⏱️ Last update: ${minutesAgo} minutes ago\n\n` +
+			`🔢 Total fetches: ${updateCount?.value || 0}\n` +
+			`📦 Version: ${versionData.version}\n` +
+			`📦 Code updated: ${versionData.update_date}\n`
+	} else {
+		statusSection += '🔶 System: Starting up'
+	}
+
+	// Add error information if present
+	if (errorData) {
+		const error = JSON.parse(errorData)
+		const errorTime = new Date(error.timestamp).toLocaleString()
+		statusSection += `\n\n⚠️ Last error: ${errorTime}`
+	}
+
+	const responseText = flightDataSection + statusSection + '\n\n_Data refreshes every 2 minutes_'
+
+	return responseText
+}
+
 export const handleCommand = async (request: Request, env: Env, ctx: DurableObjectState) => {
 	const update = await request.json<Update>()
 
@@ -95,57 +152,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		let responseText = ''
 		let replyMarkup = null
 		if (data === 'get_status') {
-			const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
-			const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
-			const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
-			const errorResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
-
-			const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
-			const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
-			const dataLength = dataLengthResult.toArray()[0] as { value: string } | undefined
-			const errorResultRow = errorResult.toArray()[0] as { value: string } | undefined
-
-			const errorData = errorResultRow?.value
-
-			// Build flight data section
-			let flightDataSection = ''
-			if (lastUpdated?.value) {
-				const lastUpdateTimestamp = parseInt(lastUpdated.value)
-				const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
-				flightDataSection =
-					`🛩️ *Latest Flight Data*\n\n` +
-					`📅 Updated: ${lastUpdate}\n` +
-					`🔢 Total fetches: ${updateCount?.value || 'N/A'}\n` +
-					`📊 Flights count: ${dataLength?.value || 'N/A'}\n\n`
-			} else {
-				flightDataSection = '❌ No flight data available yet\n\n'
-			}
-
-			// Build system status section
-			let statusSection = '📊 *System Status*\n\n'
-			if (lastUpdated?.value) {
-				const timestamp = parseInt(lastUpdated.value)
-				const nowIsrael = getCurrentIdtTime().getTime()
-				const timeDiff = nowIsrael - timestamp
-				const minutesAgo = Math.floor(timeDiff / 60000)
-				statusSection +=
-					`✅ System: Online\n\n` +
-					`⏱️ Last update: ${minutesAgo} minutes ago\n` +
-					`🔢 Total fetches: ${updateCount?.value || 0}\n` +
-					`📦 Version: ${versionData.version}\n` +
-					`📦 Code updated: ${versionData.update_date}\n`
-			} else {
-				statusSection += '🔶 System: Starting up'
-			}
-
-			// Add error information if present
-			if (errorData) {
-				const error = JSON.parse(errorData)
-				const errorTime = new Date(error.timestamp).toLocaleString()
-				statusSection += `\n\n⚠️ Last error: ${errorTime}`
-			}
-
-			responseText = flightDataSection + statusSection + '\n\n_Data refreshes every 2 minutes_'
+			responseText = buildStatusMessage(ctx)
 			replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_status' }]] }
 		}
 		await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
@@ -264,56 +271,7 @@ const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectSt
 }
 
 const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) => {
-	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
-	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
-	const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
-	const errorResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
-
-	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
-	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
-	const dataLength = dataLengthResult.toArray()[0] as { value: string } | undefined
-	const errorResultRow = errorResult.toArray()[0] as { value: string } | undefined
-
-	const errorData = errorResultRow?.value
-
-	// Build flight data section
-	let flightDataSection = ''
-	if (lastUpdated?.value) {
-		const lastUpdateTimestamp = parseInt(lastUpdated.value)
-		const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
-		flightDataSection =
-			`🛩️ *Latest Flight Data*\n\n` +
-			`📅 Updated: ${lastUpdate}\n` +
-			`🔢 Total fetches: ${updateCount?.value || 'N/A'}\n` +
-			`📊 Flights count: ${dataLength?.value || 'N/A'}\n\n`
-	} else {
-		flightDataSection = '❌ No flight data available yet\n\n'
-	}
-
-	// Build system status section
-	let statusSection = '📊 *System Status*\n\n'
-	if (lastUpdated?.value) {
-		const timestamp = parseInt(lastUpdated.value)
-		const nowIsrael = getCurrentIdtTime().getTime()
-		const timeDiff = nowIsrael - timestamp
-		const minutesAgo = Math.floor(timeDiff / 60000)
-		statusSection +=
-			`✅ System: Online\n\n` +
-			`⏱️ Last update: ${minutesAgo} minutes ago\n\n` +
-			`🔢 Total fetches: ${updateCount?.value || 0}`
-	} else {
-		statusSection += '🔶 System: Starting up'
-	}
-
-	// Add error information if present
-	if (errorData) {
-		const error = JSON.parse(errorData)
-		const errorTime = new Date(error.timestamp).toLocaleString()
-		statusSection += `\n\n⚠️ Last error: ${errorTime}`
-	}
-
-	const responseText = flightDataSection + statusSection + '\n\n_Data refreshes every 2 minutes_'
+	const responseText = buildStatusMessage(ctx)
 	const replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_status' }]] }
-
 	await sendTelegramMessage(chatId, responseText, env, false, replyMarkup)
 }
