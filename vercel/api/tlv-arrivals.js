@@ -223,15 +223,15 @@ export default async function handler(req, res) {
 					city: flight.City,
 					airline: flight.Airline,
 				}
-			})
+			}) ||
 			// .filter((flight) => {
 			// 	// Filter to flights within time window: 1hr before now to 12hr after now
 			// 	if (!flight.sta) return false
 
 			// 	const scheduledTime = new Date(flight.sta)
 			// 	return scheduledTime >= oneHourAgo && scheduledTime <= twelveHoursFromNow
-            // }) ||
-            []
+			// }) ||
+			[]
 
 		res.status(200).json({
 			Flights: transformedFlights,
