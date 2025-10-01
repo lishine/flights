@@ -4,10 +4,11 @@ import { getFlightIdByNumber, getNotTrackedFlights } from '../services/flightDat
 import { getCurrentIdtTime } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
-import { VERSION, getTelegramUrl } from '../utils/constants'
+import { getTelegramUrl } from '../utils/constants'
 import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
 import { ofetch } from 'ofetch'
+import versionData from '../../version.json'
 
 export const formatTimestampForDisplay = (timestamp: number) => {
 	const date = new Date(timestamp)
@@ -185,11 +186,15 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			'/status': () => handleStatus(chatId, env, ctx),
 			'/help': () => handleStart(chatId, env),
 		}
-
 		const command = text.split(' ')[0]
 		const handler =
 			commands[command] ||
-			(() => sendTelegramMessage(chatId, `Unknown command. Current version: ${VERSION}`, env))
+			(() =>
+				sendTelegramMessage(
+					chatId,
+					`Unknown command.\nCurrent version: ${JSON.stringify(versionData, null, 2)}`,
+					env
+				))
 		await handler()
 		return new Response('OK')
 	}
