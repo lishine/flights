@@ -153,7 +153,33 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		let replyMarkup = null
 		if (data === 'get_status') {
 			responseText = buildStatusMessage(ctx)
-			replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_status' }]] }
+			replyMarkup = {
+				inline_keyboard: [
+					[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+					[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+					[{ text: '🔄 Refresh Status', callback_data: 'get_status' }],
+				],
+			}
+		} else if (data === 'show_tracked') {
+			const trackedMessage = formatTrackingListOptimized(chatId, env, ctx)
+			responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
+			replyMarkup = {
+				inline_keyboard: [
+					[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+					[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+				],
+			}
+		} else if (data === 'show_suggestions') {
+			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
+			responseText = `🎯 *Flight Suggestions*\n\n${text}`
+			replyMarkup = {
+				inline_keyboard: [
+					[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+					[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+					...(suggestionsMarkup?.inline_keyboard || []),
+				],
+			}
 		}
 		await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 			method: 'POST',
@@ -270,19 +296,12 @@ const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) =
 	// Build the main status message
 	const responseText = buildStatusMessage(ctx)
 
-	// Add tracked flights section
-	const trackedMessage = formatTrackingListOptimized(chatId, env, ctx)
-	const trackedSection = trackedMessage !== 'No tracked flights found.'
-		? `\n🚨 *Your Tracked Flights*\n${trackedMessage}\n`
-		: '\n🚨 *Your Tracked Flights*\nNo tracked flights found.\n'
+	// Build inline keyboard with action buttons
+	const inlineKeyboard = [
+		[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+		[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+		[{ text: '🔄 Refresh Status', callback_data: 'get_status' }],
+	]
 
-	// Add flight suggestions section
-	const eligibleFlights = getNotTrackedFlights(chatId, ctx)
-	const { text: suggestionsText } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
-	const suggestionsSection = `\n🎯 *Suggested Flights*\n${suggestionsText}`
-
-	const fullResponseText = responseText + trackedSection + suggestionsSection
-
-	const replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_status' }]] }
-	await sendTelegramMessage(chatId, fullResponseText, env, false, replyMarkup)
+	await sendTelegramMessage(chatId, responseText, env, false, { inline_keyboard: inlineKeyboard })
 }
