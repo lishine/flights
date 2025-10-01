@@ -34,11 +34,11 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 	// Build flight data section
 	let flightDataSection = ''
-	if (lastUpdated?.value && parseInt(lastUpdated.value) > 0) {
-		const lastUpdateTimestamp = parseInt(lastUpdated.value)
+	const lastUpdateTimestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
+	if (lastUpdated?.value && lastUpdateTimestamp > 0 && lastUpdateTimestamp < Date.now()) {
 		const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
-		const totalFetches = updateCount?.value ? parseInt(updateCount.value) : 0
-		const flightsCount = dataLength?.value ? parseInt(dataLength.value) : 0
+		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
+		const flightsCount = dataLength?.value ? parseInt(dataLength.value) || 0 : 0
 		flightDataSection =
 			`🛩️ *Latest Flight Data*\n\n` +
 			`📅 Updated: ${lastUpdate}\n` +
@@ -50,10 +50,10 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 	// Build system status section
 	let statusSection = '📊 *System Status*\n\n'
-	if (lastUpdated?.value && parseInt(lastUpdated.value) > 0) {
-		const timestamp = parseInt(lastUpdated.value)
+	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
+	if (lastUpdated?.value && timestamp > 0 && timestamp < Date.now()) {
 		const timeAgo = formatTimeAgo(timestamp)
-		const totalFetches = updateCount?.value ? parseInt(updateCount.value) : 0
+		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
 		statusSection +=
 			`✅ System: Online\n\n` +
 			`⏱️ Last update: ${timeAgo}\n\n` +
