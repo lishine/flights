@@ -1,7 +1,7 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, clearUserTracking } from '../services/tracking'
 import { getFlightIdByNumber, getNotTrackedFlights } from '../services/flightData'
-import { getCurrentIdtTime } from '../utils/dateTime'
+import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { getTelegramUrl } from '../utils/constants'
@@ -9,18 +9,6 @@ import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
 import { ofetch } from 'ofetch'
 import versionData from '../../version.json'
-
-export const formatTimestampForDisplay = (timestamp: number) => {
-	const date = new Date(timestamp)
-	return date.toLocaleString('en-GB', {
-		day: '2-digit',
-		month: '2-digit',
-		year: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-		hour12: false,
-	})
-}
 
 export const isDataQuery = (query: CallbackQuery) => {
 	return 'data' in query
@@ -46,29 +34,30 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 	// Build flight data section
 	let flightDataSection = ''
-	if (lastUpdated?.value) {
+	if (lastUpdated?.value && lastUpdated.value !== '0') {
 		const lastUpdateTimestamp = parseInt(lastUpdated.value)
 		const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
+		const totalFetches = updateCount?.value ? parseInt(updateCount.value) : 0
+		const flightsCount = dataLength?.value ? parseInt(dataLength.value) : 0
 		flightDataSection =
 			`🛩️ *Latest Flight Data*\n\n` +
 			`📅 Updated: ${lastUpdate}\n` +
-			`🔢 Total fetches: ${updateCount?.value || 'N/A'}\n` +
-			`📊 Flights count: ${dataLength?.value || 'N/A'}\n\n`
+			`🔢 Total fetches: ${totalFetches}\n` +
+			`📊 Flights count: ${flightsCount}\n\n`
 	} else {
 		flightDataSection = '❌ No flight data available yet\n\n'
 	}
 
 	// Build system status section
 	let statusSection = '📊 *System Status*\n\n'
-	if (lastUpdated?.value) {
+	if (lastUpdated?.value && lastUpdated.value !== '0') {
 		const timestamp = parseInt(lastUpdated.value)
-		const nowIsrael = getCurrentIdtTime().getTime()
-		const timeDiff = nowIsrael - timestamp
-		const minutesAgo = Math.floor(timeDiff / 60000)
+		const timeAgo = formatTimeAgo(timestamp)
+		const totalFetches = updateCount?.value ? parseInt(updateCount.value) : 0
 		statusSection +=
 			`✅ System: Online\n\n` +
-			`⏱️ Last update: ${minutesAgo} minutes ago\n\n` +
-			`🔢 Total fetches: ${updateCount?.value || 0}\n` +
+			`⏱️ Last update: ${timeAgo}\n\n` +
+			`🔢 Total fetches: ${totalFetches}\n` +
 			`📦 Version: ${versionData.version}\n` +
 			`📦 Code updated: ${versionData.update_date}\n`
 	} else {
