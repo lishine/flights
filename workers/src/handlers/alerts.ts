@@ -1,19 +1,18 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { cleanupStaleTrackingData } from '../services/tracking'
 import type { Env } from '../env'
-import type { D1Flight } from '../types'
+import type { Flight } from '../types'
 
 export async function sendFlightAlerts(
-	changesByFlight: Record<string, { flight: D1Flight; changes: string[] }>,
+	changesByFlight: Record<string, { flight: Flight; changes: string[] }>,
 	env: Env,
 	ctx: DurableObjectState
 ) {
-
 	// Get all subscriptions in one query using Durable Object SQLite
 	const subsResult = ctx.storage.sql.exec(
 		'SELECT flight_id, telegram_id FROM subscriptions WHERE auto_cleanup_at IS NULL'
 	)
-	const allSubs = subsResult.toArray() as unknown as { flight_id: string; telegram_id: string }[]
+	const allSubs = subsResult.toArray() as { flight_id: string; telegram_id: string }[]
 
 	// Build tracking map from the same data
 	const trackingMap: Record<string, string[]> = {} // flight_id -> users
@@ -46,7 +45,7 @@ export async function sendFlightAlerts(
 	}
 }
 
-async function sendAlert(userId: number, flight: D1Flight, changes: string[], env: Env, ctx: DurableObjectState) {
+async function sendAlert(userId: number, flight: Flight, changes: string[], env: Env, ctx: DurableObjectState) {
 	const message = `🚨 *Flight Update: ${flight.flight_number}*\n\n${changes.join('\n')}\n\nCity: ${
 		flight.city || 'Unknown'
 	}\nAirline: ${flight.airline || 'Unknown'}`

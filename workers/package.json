@@ -19,6 +19,7 @@
 		"wrangler": "^4.39.0"
 	},
 	"dependencies": {
+		"prettier": "^3.6.2",
 		"typegram": "^5.2.0"
 	}
 }

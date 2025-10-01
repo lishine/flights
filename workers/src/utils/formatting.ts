@@ -1,7 +1,7 @@
-import { getUserTrackedFlightsWithData } from '../services/tracking'
+import { getUserTrackedFlightsWithData } from '../services/flightData'
 import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../env'
-import type { D1Flight } from '../types'
+import type { Flight } from '../types'
 
 // Helper function to format time from timestamp
 function formatTimeFromTimestamp(timestamp: number): string {
@@ -56,9 +56,9 @@ export async function formatTrackingListOptimized(chatId: number, env: Env, ctx:
 		let formattedTime = 'TBA'
 		let dayLabel = ''
 
-		if (flight.estimated_arrival_time) {
-			formattedTime = formatTimeFromTimestamp(flight.estimated_arrival_time)
-			dayLabel = getDayLabelFromTimestamp(flight.estimated_arrival_time)
+		if (flight.eta) {
+			formattedTime = formatTimeFromTimestamp(flight.eta)
+			dayLabel = getDayLabelFromTimestamp(flight.eta)
 		}
 
 		message += `🛩️ *${flightNum}*\n`
@@ -84,7 +84,7 @@ function escapeMarkdown(text: string): string {
 		.replace(/~/g, '\\~') // Escape tildes
 }
 
-export function formatFlightSuggestions(flights: D1Flight[]): { text: string; replyMarkup: any } {
+export const formatFlightSuggestions = (flights: Flight[]) => {
 	if (flights.length === 0) {
 		return {
 			text: 'No flights available for tracking right now (need 1+ hour until arrival).',
@@ -96,9 +96,9 @@ export function formatFlightSuggestions(flights: D1Flight[]): { text: string; re
 		let formattedTime = 'TBA'
 		let dayLabel = ''
 
-		if (flight.estimated_arrival_time) {
-			formattedTime = formatTimeFromTimestamp(flight.estimated_arrival_time)
-			dayLabel = getDayLabelFromTimestamp(flight.estimated_arrival_time)
+		if (flight.eta) {
+			formattedTime = formatTimeFromTimestamp(flight.eta)
+			dayLabel = getDayLabelFromTimestamp(flight.eta)
 		}
 
 		message += `${index + 1}. 🛩️ *${escapeMarkdown(flight.flight_number)}*\n`

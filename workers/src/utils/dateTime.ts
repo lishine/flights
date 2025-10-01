@@ -2,7 +2,7 @@
 let cachedIsraelTime: Date | null = null
 
 // Get current time in Israel timezone (handles DST automatically)
-export function getCurrentIdtTime(): Date {
+export const getCurrentIdtTime = () => {
 	// Return cached time if available (same request)
 	if (cachedIsraelTime) {
 		return cachedIsraelTime

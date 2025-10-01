@@ -1,6 +1,6 @@
 import { sendTelegramMessage } from '../services/telegram'
-import { addFlightTracking, getUserTrackedFlights, clearUserTracking } from '../services/tracking'
-import { getCurrentFlights, suggestFlightsToTrack, getFlightIdByNumber } from '../services/flightData'
+import { addFlightTracking, clearUserTracking } from '../services/tracking'
+import { getFlightIdByNumber, getNotTrackedFlights } from '../services/flightData'
 import { getCurrentIdtTime } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
@@ -98,11 +98,9 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 		let responseText = ''
 		let replyMarkup = null
 		if (data === 'get_flights') {
-			const [lastUpdatedResult, updateCountResult, dataLengthResult] = await Promise.all([
-				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
-				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
-				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength'),
-			])
+			const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
+			const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
+			const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
 
 			const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
 			const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
@@ -122,10 +120,8 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 			}
 			replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Again', callback_data: 'get_flights' }]] }
 		} else if (data === 'get_status') {
-			const [lastUpdatedResult, updateCountResult] = await Promise.all([
-				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
-				ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
-			])
+			const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
+			const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
 
 			const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
 			const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
@@ -256,32 +252,18 @@ async function handleClearTracked(chatId: number, env: Env, ctx: DurableObjectSt
 }
 
 async function handleTestTracking(chatId: number, env: Env, ctx: DurableObjectState) {
-	// Call Vercel API directly with next-hours parameter instead of using database
-	const vercelUrl = `https://flights-taupe.vercel.app/api/tlv-arrivals?hours=1`
-	const response = await fetch(vercelUrl)
-	const apiData = (await response.json()) as { Flights: any[] }
+	// Get flights that are not currently tracked by the user using LEFT JOIN
+	const eligibleFlights = await getNotTrackedFlights(chatId, ctx)
 
-	if (!response.ok) {
-		await sendTelegramMessage(chatId, '❌ Error fetching flight data from API', env)
-		return
-	}
-
-	// Get user's currently tracked flights to exclude them from suggestions
-	const trackedFlights = await getUserTrackedFlights(chatId, env, ctx)
-	const trackedFlightIds = new Set(trackedFlights)
-
-	// Filter out already tracked flights and format suggestions
-	const eligibleFlights = apiData.Flights.filter((flight: any) => !trackedFlightIds.has(flight.id))
+	// Format and send suggestions (limit to 5 flights)
 	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
 }
 
 async function handleFlights(chatId: number, env: Env, ctx: DurableObjectState) {
-	const [lastUpdatedResult, updateCountResult, dataLengthResult] = await Promise.all([
-		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
-		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
-		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength'),
-	])
+	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
+	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
+	const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
 
 	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
 	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
@@ -305,11 +287,9 @@ async function handleFlights(chatId: number, env: Env, ctx: DurableObjectState) 
 }
 
 async function handleStatus(chatId: number, env: Env, ctx: DurableObjectState) {
-	const [lastUpdatedResult, updateCountResult, errorResult] = await Promise.all([
-		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated'),
-		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount'),
-		ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error'),
-	])
+	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
+	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
+	const errorResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
 
 	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
 	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined

@@ -88,18 +88,6 @@ async function getBrowser() {
 }
 
 export default async function handler(req, res) {
-	// Handle query parameters for filtering flights
-	const { flights, hours } = req.query
-
-	// If specific flights requested, return only those
-	if (flights) {
-		const flightList = flights.split(',').map((f) => f.trim().toUpperCase())
-		console.log(`Filtering flights: ${flightList.join(', ')}`)
-	}
-
-	// If hours parameter provided, use it instead of default 12 hours
-	const hoursLimit = hours ? parseInt(hours) : 12
-	console.log(`Hours limit: ${hoursLimit}`)
 	let page = null
 
 	try {
@@ -215,50 +203,33 @@ export default async function handler(req, res) {
 
 		console.log(`Success!`)
 
-		// Transform flight data to parse timestamps and filter fields
+		// Transform flight data to parse timestamps and return simplified format
 		const nowIdt = getCurrentIdtTime()
-		const hoursFromNow = new Date(nowIdt.getTime() + hoursLimit * 60 * 60 * 1000)
+
+		// Calculate time window: 1 hour before now to 12 hours after now
+		const oneHourAgo = new Date(nowIdt.getTime() - 60 * 60 * 1000)
+		const twelveHoursFromNow = new Date(nowIdt.getTime() + 12 * 60 * 60 * 1000)
 
 		const transformedFlights =
 			flightData.Flights?.map((flight) => {
 				const scheduledArrival = parseTimestamp(flight.ScheduledDateTime)
 				const estimatedArrival = parseTimestamp(flight.UpdatedDateTime)
 
-				// Generate composite ID from flight number and scheduled arrival time
-				const flightId = `${flight.Flight.replace(' ', '')}_${scheduledArrival ?? 'unknown'}`
-
 				return {
-					id: flightId,
-					flight_number: flight.Flight.replace(' ', ''),
+					fln: flight.Flight.replace(' ', ''),
 					status: flight.Status,
-					scheduled_arrival_time: scheduledArrival,
-					estimated_arrival_time: estimatedArrival,
+					sta: scheduledArrival,
+					eta: estimatedArrival,
 					city: flight.City,
 					airline: flight.Airline,
-					created_at: nowIdt.getTime(),
-					updated_at: nowIdt.getTime(),
 				}
-			}).filter((flight) => {
-				// Filter out canceled and landed flights
-				if (flight.status === 'CANCELED' || flight.status === 'LANDED') {
-					return false
-				}
+			})
+			.filter((flight) => {
+				// Filter to flights within time window: 1hr before now to 12hr after now
+				if (!flight.sta) return false
 
-				// If specific flights requested, only return those
-				if (flights) {
-					const flightList = flights.split(',').map((f) => f.trim())
-					if (!flightList.includes(flight.id)) {
-						return false
-					}
-				}
-
-				// Filter to only next hoursLimit hours flights
-				if (flight.scheduled_arrival_time) {
-					const scheduledTime = new Date(flight.scheduled_arrival_time)
-					return scheduledTime >= nowIdt && scheduledTime <= hoursFromNow
-				}
-
-				return false
+				const scheduledTime = new Date(flight.sta)
+				return scheduledTime >= oneHourAgo && scheduledTime <= twelveHoursFromNow
 			}) || []
 
 		res.status(200).json({
