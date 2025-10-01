@@ -201,13 +201,15 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				],
 			}
 		} else if (data === 'show_tracked') {
-			const trackedMessage = formatTrackingListOptimized(chatId, env, ctx)
+			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
 			responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
+			// Combine the untrack buttons with navigation buttons
+			const navigationButtons = [
+				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+			]
 			replyMarkup = {
-				inline_keyboard: [
-					[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
-					[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
-				],
+				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 			}
 		} else if (data === 'show_suggestions') {
 			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
