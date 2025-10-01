@@ -1,10 +1,8 @@
 import chromium from '@sparticuz/chromium'
 import puppeteer from 'puppeteer-core'
 
-// Cache browser instance globally (Vercel keeps functions warm)
 let cachedBrowser = null
 
-// Parse RawFlight's /Date(<timestamp>)/ string to Unix timestamp in milliseconds
 function parseTimestamp(dateTimeString) {
 	const match = dateTimeString.match(/\/Date\((\d+)\)\//)
 	if (!match || !match[1]) {
@@ -14,9 +12,7 @@ function parseTimestamp(dateTimeString) {
 	return parseInt(match[1])
 }
 
-// Get current time in Israel timezone (handles DST automatically)
 function getCurrentIdtTime() {
-	// Create a date object for Israel timezone
 	const now = new Date()
 	const israelTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
 	return israelTime
@@ -183,7 +179,6 @@ export default async function handler(req, res) {
 
 		console.log(`Navigating to page...`)
 
-		// Navigate with minimal wait
 		await page.goto('https://www.iaa.gov.il/en/airports/ben-gurion/flight-board/?flightType=arrivals', {
 			waitUntil: 'domcontentloaded', // Fastest option
 			timeout: 8000, // Quick timeout
@@ -240,7 +235,6 @@ export default async function handler(req, res) {
 			error: err.message,
 		})
 	} finally {
-		// Close page but keep browser alive for next request
 		if (page && !page.isClosed()) {
 			try {
 				await page.close()
@@ -251,7 +245,6 @@ export default async function handler(req, res) {
 	}
 }
 
-// Cleanup on process exit
 process.on('exit', async () => {
 	if (cachedBrowser) {
 		await cachedBrowser.close()

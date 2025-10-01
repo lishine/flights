@@ -187,13 +187,9 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		const text = update.message.text
 
 		const commands: { [key: string]: () => Promise<void> } = {
-			'/start': () => handleStart(chatId, env),
 			'/track': () => handleTrack(chatId, text, env, ctx),
-			'/tracked': () => handleTracked(chatId, env, ctx),
 			'/clear_tracked': () => handleClearTracked(chatId, env, ctx),
-			'/test_tracking': () => handleTestTracking(chatId, env, ctx),
 			'/status': () => handleStatus(chatId, env, ctx),
-			'/help': () => handleStart(chatId, env),
 		}
 		const command = text.split(' ')[0]
 		const handler =
@@ -271,7 +267,22 @@ const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectSt
 }
 
 const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) => {
+	// Build the main status message
 	const responseText = buildStatusMessage(ctx)
+
+	// Add tracked flights section
+	const trackedMessage = formatTrackingListOptimized(chatId, env, ctx)
+	const trackedSection = trackedMessage !== 'No tracked flights found.'
+		? `\n🚨 *Your Tracked Flights*\n${trackedMessage}\n`
+		: '\n🚨 *Your Tracked Flights*\nNo tracked flights found.\n'
+
+	// Add flight suggestions section
+	const eligibleFlights = getNotTrackedFlights(chatId, ctx)
+	const { text: suggestionsText } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
+	const suggestionsSection = `\n🎯 *Suggested Flights*\n${suggestionsText}`
+
+	const fullResponseText = responseText + trackedSection + suggestionsSection
+
 	const replyMarkup = { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'get_status' }]] }
-	await sendTelegramMessage(chatId, responseText, env, false, replyMarkup)
+	await sendTelegramMessage(chatId, fullResponseText, env, false, replyMarkup)
 }

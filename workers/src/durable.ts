@@ -1,18 +1,3 @@
-/**
- * FlightDO - SQLite-backed Durable Object using Cloudflare's Synchronous KV API
- *
- * This class uses SYNCHRONOUS KV API throughout:
- * - SQLite-backed storage (recommended, replaces obsolete KV backend)
- * - blockConcurrencyWhile() for proper initialization
- * - Synchronous KV API methods (ctx.storage.kv.get, ctx.storage.kv.put, ctx.storage.kv.delete)
- * - SQL API via ctx.storage.sql
- * - Point-in-Time Recovery support
- * - Proper alarm counter synchronization across instances
- *
- * Migration configured in wrangler.toml with new_sqlite_classes = ["FlightDO"]
- *
- * API Reference: https://developers.cloudflare.com/durable-objects/api/storage-api/
- */
 import { DurableObject } from 'cloudflare:workers'
 import { Env } from './env'
 import { runScheduledJob } from './handlers/cron'
@@ -26,12 +11,9 @@ export class FlightDO extends DurableObject<Env> {
 		console.log('constructor')
 		super(ctx, env)
 
-		// Use blockConcurrencyWhile() to ensure no requests are delivered until initialization completes
 		ctx.blockConcurrencyWhile(async () => {
-			// Initialize alarm count using synchronous KV API directly
 			this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
 
-			// Set up initial alarm if not already set
 			let currentAlarm = await ctx.storage.getAlarm()
 			if (currentAlarm == null) {
 				console.log('constructor currentAlarm == null')
@@ -86,19 +68,15 @@ export class FlightDO extends DurableObject<Env> {
 	async alarm(): Promise<void> {
 		console.log('alarm')
 
-		// Pass ctx to runScheduledJob for SQLite access
 		runScheduledJob(this.env, this.ctx)
 
-		// Get current count, increment, and store using sync helper methods
 		const currentCount = this.getAlarmCount()
 		const newCount = currentCount + 1
 
 		console.log(`Alarm fired! Count: ${newCount}`)
 
-		// Store updated count using sync helper method
 		this.setAlarmCount(newCount)
 
-		// Set next alarm for 2 minutes from now
 		const twoMinutes = 60 * 1000
 		console.log(`Setting next alarm for ${twoMinutes}ms from now`)
 		await this.ctx.storage.setAlarm(Date.now() + twoMinutes)

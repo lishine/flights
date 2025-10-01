@@ -28,7 +28,6 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 
 		const changesByFlight: Record<string, { flight: Flight; changes: string[] }> = {}
 
-		// Check for changes in existing flights
 		for (const flightId in previousFlightsMap) {
 			const prevFlight = previousFlightsMap[flightId]
 			const currentFlight = currentFlightsMap[flightId]
@@ -58,18 +57,16 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		// 	}
 		// }
 
-		// Send alerts for changes
 		if (Object.keys(changesByFlight).length > 0) {
 			await sendFlightAlerts(changesByFlight, env, ctx)
 		}
 
-		// Cleanup completed flights
-		await cleanupCompletedFlights(currentFlights, env, ctx)
+		cleanupCompletedFlights(currentFlights, env, ctx)
 
 		return new Response('Cron job completed')
 	} catch (error) {
 		console.error('Cron job failed:', error)
-		await writeErrorStatus(ctx, error instanceof Error ? error : 'Unknown error')
+		writeErrorStatus(ctx, error instanceof Error ? error : 'Unknown error')
 		return new Response('Cron job failed', { status: 500 })
 	}
 }
