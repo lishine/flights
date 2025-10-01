@@ -1,5 +1,5 @@
 import { sendTelegramMessage } from '../services/telegram'
-import { addFlightTracking, clearUserTracking } from '../services/tracking'
+import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
 import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights } from '../services/flightData'
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
@@ -152,6 +152,43 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			return new Response('OK')
 		}
 
+		if (data.startsWith('untrack_single:')) {
+			const flightId = data.split(':')[1]
+			await handleUntrack(chatId, flightId, env, ctx)
+
+			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Untracking flight...' }),
+			})
+
+			// Update the message to show the new tracked flights list
+			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
+			const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
+
+			// Combine the untrack buttons with navigation buttons
+			const navigationButtons = [
+				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+			]
+			const finalMarkup = {
+				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
+			}
+
+			await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					chat_id: chatId,
+					message_id: messageId,
+					text: responseText,
+					parse_mode: 'Markdown',
+					reply_markup: finalMarkup,
+				}),
+			})
+			return new Response('OK')
+		}
+
 		let responseText = ''
 		let replyMarkup = null
 		if (data === 'get_status') {
@@ -256,6 +293,11 @@ const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableO
 		}
 	}
 	await sendTelegramMessage(chatId, results.join('\n'), env)
+}
+
+const handleUntrack = async (chatId: number, flightId: string, env: Env, ctx: DurableObjectState) => {
+	// Remove the flight from tracking using the untrackFlight function
+	untrackFlight(chatId, flightId, env, ctx)
 }
 
 const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectState) => {

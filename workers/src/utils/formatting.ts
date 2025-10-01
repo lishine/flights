@@ -44,10 +44,18 @@ export const formatTrackingList = async (userFlights: string[], env: Env) => {
 }
 
 // New optimized version that takes chatId directly
-export const formatTrackingListOptimized = (chatId: number, env: Env, ctx: DurableObjectState) => {
+export const formatTrackingListOptimized = (
+	chatId: number,
+	env: Env,
+	ctx: DurableObjectState
+): { text: string; replyMarkup: InlineKeyboardMarkup | null } => {
 	const flights = getUserTrackedFlightsWithData(chatId, env, ctx)
 
-	if (flights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
+	if (flights.length === 0)
+		return {
+			text: "You're not tracking any flights. Use /track LY086 to start!",
+			replyMarkup: null,
+		}
 
 	let message = '✈️ *Your Tracked Flights:*\n\n'
 	for (const flight of flights) {
@@ -67,7 +75,30 @@ export const formatTrackingListOptimized = (chatId: number, env: Env, ctx: Durab
 		message += `Airline: ${flight.airline || 'Unknown'}\n`
 		message += `⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
 	}
-	return message
+
+	// Create untrack buttons - 3 per row
+	const inlineKeyboard: InlineKeyboardButton[][] = []
+	let currentRow: InlineKeyboardButton[] = []
+
+	flights.forEach((flight, index) => {
+		currentRow.push({
+			text: `❌ ${flight.flight_number}`,
+			callback_data: `untrack_single:${flight.id}`,
+		})
+
+		// Start a new row after every 3 buttons
+		if ((index + 1) % 3 === 0 || index === flights.length - 1) {
+			inlineKeyboard.push([...currentRow])
+			currentRow = []
+		}
+	})
+
+	return {
+		text: message,
+		replyMarkup: {
+			inline_keyboard: inlineKeyboard,
+		},
+	}
 }
 
 // Helper function to escape Markdown special characters
@@ -91,7 +122,7 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 			replyMarkup: null,
 		}
 	}
-	let message = '🎯 *Suggested Flights to Track:*\n\nThese flights arrive in 1+ hours:\n\n'
+	let message = '🎯 *Suggested Flights to Track:*\n\nThese flights arrive next:\n\n'
 	const inlineKeyboard: InlineKeyboardButton[][] = []
 
 	flights.forEach((flight, index) => {
