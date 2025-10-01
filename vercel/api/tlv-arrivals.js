@@ -161,7 +161,6 @@ export default async function handler(req, res) {
 			page.on('response', async (response) => {
 				try {
 					const url = response.url()
-					console.log({ url: url })
 
 					if (url.includes('FlightBoardSurface/Search')) {
 						console.log(`Found target response`)
@@ -224,15 +223,13 @@ export default async function handler(req, res) {
 					city: flight.City,
 					airline: flight.Airline,
 				}
-			}) ||
-			// .filter((flight) => {
-			// 	// Filter to flights within time window: 1hr before now to 12hr after now
-			// 	if (!flight.sta) return false
+			}).filter((flight) => {
+				// Filter to flights within time window: 1hr before now to 12hr after now
+				if (!flight.sta) return false
 
-			// 	const scheduledTime = new Date(flight.sta)
-			// 	return scheduledTime >= oneHourAgo && scheduledTime <= twelveHoursFromNow
-			// }) ||
-			[]
+				const scheduledTime = new Date(flight.sta)
+				return scheduledTime >= oneHourAgo && scheduledTime <= twelveHoursFromNow
+			}) || []
 
 		res.status(200).json({
 			Flights: transformedFlights,
