@@ -34,7 +34,7 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 	// Build flight data section
 	let flightDataSection = ''
-	if (lastUpdated?.value && lastUpdated.value !== '0') {
+	if (lastUpdated?.value && parseInt(lastUpdated.value) > 0) {
 		const lastUpdateTimestamp = parseInt(lastUpdated.value)
 		const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
 		const totalFetches = updateCount?.value ? parseInt(updateCount.value) : 0
@@ -50,7 +50,7 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 	// Build system status section
 	let statusSection = '📊 *System Status*\n\n'
-	if (lastUpdated?.value && lastUpdated.value !== '0') {
+	if (lastUpdated?.value && parseInt(lastUpdated.value) > 0) {
 		const timestamp = parseInt(lastUpdated.value)
 		const timeAgo = formatTimeAgo(timestamp)
 		const totalFetches = updateCount?.value ? parseInt(updateCount.value) : 0
