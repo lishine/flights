@@ -11,7 +11,7 @@ export default {
 
 		if (request.method === 'POST' && url.pathname === '/webhook') {
 			const dbStub = env.FLIGHTS_DO.getByName('alarm')
-			dbStub.fetch(request)
+			return dbStub.fetch(request)
 		}
 
 		if (request.method === 'GET' && url.pathname === '/reset-schema') {
