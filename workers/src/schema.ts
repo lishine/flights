@@ -46,3 +46,12 @@ export const initializeSchema = (ctx: DurableObjectState) => {
 		)
 	`)
 }
+
+export const resetSchema = (ctx: DurableObjectState) => {
+	ctx.storage.sql.exec(`DROP TABLE IF EXISTS subscriptions`)
+	ctx.storage.sql.exec(`DROP TABLE IF EXISTS flights`)
+	ctx.storage.sql.exec(`DROP TABLE IF EXISTS status`)
+
+	// Then reinitialize with the new schema
+	initializeSchema(ctx)
+}

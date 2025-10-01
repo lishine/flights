@@ -17,6 +17,7 @@ import { DurableObject } from 'cloudflare:workers'
 import { Env } from './env'
 import { runScheduledJob } from './handlers/cron'
 import { handleCommand } from './handlers/commands'
+import { resetSchema } from './schema'
 
 export class FlightDO extends DurableObject<Env> {
 	private alarmCount: number = 0
@@ -49,6 +50,11 @@ export class FlightDO extends DurableObject<Env> {
 		}
 
 		switch (url.pathname) {
+			case '/reset-schema':
+				resetSchema(this.ctx)
+				return new Response('Schema reset successfully', {
+					headers: { 'Content-Type': 'text/plain' },
+				})
 			case '/status':
 				const count = this.getAlarmCount()
 				return new Response(`FlightDO Status - Alarms fired: ${count}`, {

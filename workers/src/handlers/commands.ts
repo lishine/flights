@@ -131,7 +131,8 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				statusSection +=
 					`✅ System: Online\n\n` +
 					`⏱️ Last update: ${minutesAgo} minutes ago\n\n` +
-					`🔢 Total fetches: ${updateCount?.value || 0}`
+					`🔢 Total fetches: ${updateCount?.value || 0}\n\n` +
+					`📦 Version: ${versionData.version}`
 			} else {
 				statusSection += '🔶 System: Starting up'
 			}

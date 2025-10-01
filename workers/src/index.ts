@@ -14,10 +14,6 @@ export default {
 			return dbStub.fetch(request)
 		}
 
-		// For testing durable object endpoints
-		if (url.pathname.startsWith('/alarm/')) {
-			return await stub.fetch(request)
-		}
-		return new Response(`OK`, { status: 200 })
+		return await stub.fetch(request)
 	},
 }
