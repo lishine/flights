@@ -4,7 +4,7 @@ import type { Env } from '../env'
 import type { Flight } from '../types'
 
 // Helper function to format time from timestamp
-function formatTimeFromTimestamp(timestamp: number): string {
+export const formatTimeFromTimestamp = (timestamp: number) => {
 	const date = new Date(timestamp)
 	return date.toLocaleTimeString('en-GB', {
 		hour: '2-digit',
@@ -14,7 +14,7 @@ function formatTimeFromTimestamp(timestamp: number): string {
 }
 
 // Helper function to get day label from timestamp
-function getDayLabelFromTimestamp(timestamp: number): string {
+export const getDayLabelFromTimestamp = (timestamp: number) => {
 	const date = new Date(timestamp)
 	const todayIdt = getCurrentIdtTime()
 	const tomorrowIdt = new Date(todayIdt)
@@ -34,7 +34,7 @@ function getDayLabelFromTimestamp(timestamp: number): string {
 	}
 }
 
-export async function formatTrackingList(userFlights: string[], env: Env): Promise<string> {
+export const formatTrackingList = async (userFlights: string[], env: Env) => {
 	if (userFlights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
 
 	// Use the optimized function to get flight data in a single query
@@ -44,8 +44,8 @@ export async function formatTrackingList(userFlights: string[], env: Env): Promi
 }
 
 // New optimized version that takes chatId directly
-export async function formatTrackingListOptimized(chatId: number, env: Env, ctx: DurableObjectState): Promise<string> {
-	const flights = await getUserTrackedFlightsWithData(chatId, env, ctx)
+export const formatTrackingListOptimized = (chatId: number, env: Env, ctx: DurableObjectState) => {
+	const flights = getUserTrackedFlightsWithData(chatId, env, ctx)
 
 	if (flights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
 
@@ -71,7 +71,7 @@ export async function formatTrackingListOptimized(chatId: number, env: Env, ctx:
 }
 
 // Helper function to escape Markdown special characters
-function escapeMarkdown(text: string): string {
+export const escapeMarkdown = (text: string) => {
 	if (!text) return ''
 	return text
 		.replace(/\*/g, '\\*') // Escape asterisks

@@ -1,12 +1,14 @@
-import type { Env } from '../index'
+import type { Env } from '../env'
+import { $fetch } from 'ofetch'
+import { getTelegramUrl } from '../utils/constants'
 
-export async function sendTelegramMessage(
+export const sendTelegramMessage = async (
 	chatId: number,
 	text: string,
 	env: Env,
 	disableNotification: boolean = false,
 	replyMarkup?: any
-) {
+) => {
 	try {
 		const payload: any = {
 			chat_id: chatId,
@@ -19,18 +21,11 @@ export async function sendTelegramMessage(
 
 		console.log(`Sending Telegram message to ${chatId}, length: ${text.length}`)
 
-		const response = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+		const result = (await $fetch(`${getTelegramUrl(env)}/sendMessage`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(payload),
-		})
-
-		const result = (await response.json()) as { ok: boolean; description?: string }
-
-		if (!response.ok) {
-			console.error(`Telegram API HTTP error: ${response.status} ${response.statusText}`, result)
-			throw new Error(`Telegram API HTTP error: ${response.status} - ${response.statusText}`)
-		}
+			body: payload,
+		})) as { ok: boolean; description?: string }
 
 		if (!result.ok) {
 			console.error('Telegram API returned error:', result)

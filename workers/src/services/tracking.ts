@@ -1,31 +1,10 @@
 import type { Env } from '../env'
 
-interface Subscription {
-	telegram_id: string
-	flight_id: string
-	created_at: string
-	auto_cleanup_at: string | null
+export const addFlightTracking = (userId: number, flightId: string, env: Env, ctx: DurableObjectState) => {
+	ctx.storage.sql.exec('INSERT OR IGNORE INTO subscriptions (telegram_id, flight_id) VALUES (?, ?)', userId, flightId)
 }
 
-export const addFlightTracking = (
-	userId: number,
-	flightId: string,
-	env: Env,
-	ctx: DurableObjectState
-) => {
-	ctx.storage.sql.exec(
-		'INSERT OR IGNORE INTO subscriptions (telegram_id, flight_id) VALUES (?, ?)',
-		userId,
-		flightId
-	)
-}
-
-export const removeFlightTracking = (
-	userId: number,
-	flightId: string,
-	env: Env,
-	ctx: DurableObjectState
-) => {
+export const removeFlightTracking = (userId: number, flightId: string, env: Env, ctx: DurableObjectState) => {
 	ctx.storage.sql.exec('DELETE FROM subscriptions WHERE telegram_id = ? AND flight_id = ?', userId, flightId)
 }
 

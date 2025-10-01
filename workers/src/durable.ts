@@ -44,24 +44,19 @@ export class FlightDO extends DurableObject<Env> {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url)
 
-		// Handle webhook commands (Telegram bot commands)
 		if (request.method === 'POST' && url.pathname === '/webhook') {
 			return handleCommand(request, this.env, this.ctx)
 		}
 
 		switch (url.pathname) {
 			case '/status':
-				// Get fresh count using synchronous helper method
 				const count = this.getAlarmCount()
 				return new Response(`FlightDO Status - Alarms fired: ${count}`, {
 					headers: { 'Content-Type': 'text/plain' },
 				})
 
 			case '/reset':
-				// Reset counter and set new alarm using sync helper method
 				this.setAlarmCount(0)
-				// const oneMinute = 60 * 1000
-				// await this.ctx.storage.setAlarm(Date.now() + oneMinute)
 				return new Response('Alarm count reset and new alarm set', {
 					headers: { 'Content-Type': 'text/plain' },
 				})

@@ -1,8 +1,12 @@
+import type { Env } from '../env'
+
 export const TELEGRAM_API = 'https://api.telegram.org/bot'
 export const FLIGHTRADAR24_URL = 'https://www.flightradar24.com/data/flights'
-undefined
+export const VERCEL_FLIGHTS_API_URL = 'https://flights-taupe.vercel.app/api/tlv-arrivals'
 
 export const VERSION = 'v74'
+
+export const getTelegramUrl = (env: Env) => `${TELEGRAM_API}${env.BOT_TOKEN}`
 
 
 

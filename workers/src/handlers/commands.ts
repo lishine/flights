@@ -4,12 +4,12 @@ import { getFlightIdByNumber, getNotTrackedFlights } from '../services/flightDat
 import { getCurrentIdtTime } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
-import { VERSION } from '../utils/constants'
+import { VERSION, getTelegramUrl } from '../utils/constants'
 import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
+import { ofetch } from 'ofetch'
 
-// Helper function to format timestamp for display
-function formatTimestampForDisplay(timestamp: number): string {
+export const formatTimestampForDisplay = (timestamp: number) => {
 	const date = new Date(timestamp)
 	return date.toLocaleString('en-GB', {
 		day: '2-digit',
@@ -21,24 +21,21 @@ function formatTimestampForDisplay(timestamp: number): string {
 	})
 }
 
-// Type guard to check if CallbackQuery is DataQuery (has 'data' property)
-function isDataQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
+export const isDataQuery = (query: CallbackQuery) => {
 	return 'data' in query
 }
 
-// Type guard to check if Message has 'text' property
-function isTextMessage(message: Message): message is Message.TextMessage {
+export const isTextMessage = (message: Message) => {
 	return 'text' in message
 }
 
-export async function handleCommand(request: Request, env: Env, ctx: DurableObjectState): Promise<Response> {
-	const update = (await request.json()) as Update
+export const handleCommand = async (request: Request, env: Env, ctx: DurableObjectState) => {
+	const update = await request.json<Update>()
 
 	if ('callback_query' in update && update.callback_query) {
 		const callbackQuery = update.callback_query
-		// Ensure message exists
 		if (!callbackQuery.message) {
-			await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/answerCallbackQuery`, {
+			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Message too old' }),
@@ -49,9 +46,8 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 		const chatId = callbackQuery.message.chat.id
 		const messageId = callbackQuery.message.message_id
 
-		// Check if callbackQuery is DataQuery
 		if (!isDataQuery(callbackQuery)) {
-			await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/answerCallbackQuery`, {
+			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Unsupported callback type' }),
@@ -66,9 +62,9 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 			const results = []
 			for (const code of flightCodes) {
 				if (isValidFlightCode(code)) {
-					const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
+					const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 					if (flightId) {
-						await addFlightTracking(chatId, flightId, env, ctx)
+						addFlightTracking(chatId, flightId, env, ctx)
 						results.push(`✓ Now tracking ${code.toUpperCase()}`)
 					} else {
 						results.push(`❌ Flight not found: ${code}`)
@@ -77,12 +73,12 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 					results.push(`❌ Invalid flight code: ${code}`)
 				}
 			}
-			await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/answerCallbackQuery`, {
+			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flights...' }),
 			})
-			await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/editMessageText`, {
+			await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -140,12 +136,12 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 				responseText = '🔶 System starting up'
 			}
 		}
-		await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/answerCallbackQuery`, {
+		await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ callback_query_id: callbackQuery.id, text: '🔄 Refreshing...' }),
 		})
-		await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/editMessageText`, {
+		await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -161,7 +157,6 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 
 	if ('message' in update && update.message) {
 		const chatId = update.message.chat.id
-		// Use type guard to check for text property
 		if (!isTextMessage(update.message)) {
 			await sendTelegramMessage(
 				chatId,
@@ -194,7 +189,7 @@ export async function handleCommand(request: Request, env: Env, ctx: DurableObje
 	return new Response('OK')
 }
 
-async function handleStart(chatId: number, env: Env) {
+const handleStart = async (chatId: number, env: Env) => {
 	const message =
 		`🤖 Ben Gurion Airport Bot\n\n` +
 		`Available commands:\n` +
@@ -218,14 +213,14 @@ async function handleStart(chatId: number, env: Env) {
 	await sendTelegramMessage(chatId, message, env, false, replyMarkup)
 }
 
-async function handleTrack(chatId: number, text: string, env: Env, ctx: DurableObjectState) {
+const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableObjectState) => {
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
 	for (const code of flightCodes) {
 		if (isValidFlightCode(code)) {
-			const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
+			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 			if (flightId) {
-				await addFlightTracking(chatId, flightId, env, ctx)
+				addFlightTracking(chatId, flightId, env, ctx)
 				results.push(`✓ Now tracking ${code.toUpperCase()}`)
 			} else {
 				results.push(`❌ Flight not found: ${code}`)
@@ -237,12 +232,12 @@ async function handleTrack(chatId: number, text: string, env: Env, ctx: DurableO
 	await sendTelegramMessage(chatId, results.join('\n'), env)
 }
 
-async function handleTracked(chatId: number, env: Env, ctx: DurableObjectState) {
-	const message = await formatTrackingListOptimized(chatId, env, ctx)
+const handleTracked = async (chatId: number, env: Env, ctx: DurableObjectState) => {
+	const message = formatTrackingListOptimized(chatId, env, ctx)
 	await sendTelegramMessage(chatId, message, env)
 }
 
-async function handleClearTracked(chatId: number, env: Env, ctx: DurableObjectState) {
+const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectState) => {
 	const clearedCount = await clearUserTracking(chatId, env, ctx)
 	const message =
 		clearedCount > 0
@@ -251,16 +246,15 @@ async function handleClearTracked(chatId: number, env: Env, ctx: DurableObjectSt
 	await sendTelegramMessage(chatId, message, env)
 }
 
-async function handleTestTracking(chatId: number, env: Env, ctx: DurableObjectState) {
-	// Get flights that are not currently tracked by the user using LEFT JOIN
-	const eligibleFlights = await getNotTrackedFlights(chatId, ctx)
+const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState) => {
+	const eligibleFlights = getNotTrackedFlights(chatId, ctx)
 
 	// Format and send suggestions (limit to 5 flights)
 	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
 }
 
-async function handleFlights(chatId: number, env: Env, ctx: DurableObjectState) {
+const handleFlights = async (chatId: number, env: Env, ctx: DurableObjectState) => {
 	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
 	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
 	const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
@@ -286,7 +280,7 @@ async function handleFlights(chatId: number, env: Env, ctx: DurableObjectState) 
 	await sendTelegramMessage(chatId, responseText, env, false, replyMarkup)
 }
 
-async function handleStatus(chatId: number, env: Env, ctx: DurableObjectState) {
+const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) => {
 	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
 	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
 	const errorResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
