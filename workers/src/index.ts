@@ -11,11 +11,11 @@ export default {
 
 		if (request.method === 'POST' && url.pathname === '/webhook') {
 			const dbStub = env.FLIGHTS_DO.getByName('alarm')
-			return dbStub.fetch(request)
+			dbStub.fetch(request)
 		}
 
 		if (request.method === 'GET' && url.pathname === '/reset-schema') {
-			return await stub.fetch(request)
+			return stub.fetch(request)
 		}
 		return new Response(`OK`, { status: 200 })
 	},
