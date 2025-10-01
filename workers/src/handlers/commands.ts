@@ -1,6 +1,6 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, clearUserTracking } from '../services/tracking'
-import { getFlightIdByNumber, getNotTrackedFlights } from '../services/flightData'
+import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights } from '../services/flightData'
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
@@ -138,6 +138,20 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			return new Response('OK')
 		}
 
+		if (data.startsWith('track_single:')) {
+			const flightNumber = data.split(':')[1]
+			// Reuse handleTrack function by constructing a command-like text
+			await handleTrack(chatId, `/track ${flightNumber}`, env, ctx)
+
+			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flight...' }),
+			})
+			// Don't need to edit the message since handleTrack will send a new one
+			return new Response('OK')
+		}
+
 		let responseText = ''
 		let replyMarkup = null
 		if (data === 'get_status') {
@@ -205,6 +219,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			'/track': () => handleTrack(chatId, text, env, ctx),
 			'/clear_tracked': () => handleClearTracked(chatId, env, ctx),
 			'/status': () => handleStatus(chatId, env, ctx),
+			'/test': () => handleTestData(chatId, env, ctx),
 		}
 		const command = text.split(' ')[0]
 		const handler =
@@ -224,23 +239,6 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 	return new Response('OK')
 }
 
-const handleStart = async (chatId: number, env: Env) => {
-	const message =
-		`🤖 Ben Gurion Airport Bot\n\n` +
-		`Available commands:\n` +
-		`📊 /status - System status & flight data\n` +
-		`🚨 /track LY086 - Track a flight\n` +
-		`📋 /tracked - Your tracked flights\n` +
-		`🗑️ /clear\\_tracked - Clear all tracked flights\n` +
-		`🎯 /test\\_tracking - Suggested flights\n` +
-		`ℹ️ /help - Show this menu\n\n` +
-		`Choose an option:`
-	const replyMarkup = {
-		inline_keyboard: [[{ text: '📊 Status', callback_data: 'get_status' }]],
-	}
-	await sendTelegramMessage(chatId, message, env, false, replyMarkup)
-}
-
 const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableObjectState) => {
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
@@ -258,11 +256,6 @@ const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableO
 		}
 	}
 	await sendTelegramMessage(chatId, results.join('\n'), env)
-}
-
-const handleTracked = async (chatId: number, env: Env, ctx: DurableObjectState) => {
-	const message = formatTrackingListOptimized(chatId, env, ctx)
-	await sendTelegramMessage(chatId, message, env)
 }
 
 const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectState) => {
@@ -293,4 +286,39 @@ const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) =
 	]
 
 	await sendTelegramMessage(chatId, responseText, env, false, { inline_keyboard: inlineKeyboard })
+}
+
+const handleTestData = async (chatId: number, env: Env, ctx: DurableObjectState) => {
+	try {
+		// Clear existing fake flights
+		ctx.storage.sql.exec("DELETE FROM flights WHERE flight_number LIKE 'FAKE_%'")
+
+		// Add new fake flights
+		const fakeFlights = generateFakeFlights()
+		for (const flight of fakeFlights) {
+			ctx.storage.sql.exec(
+				`INSERT INTO flights (id, flight_number, status, sta, eta, city, airline, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				flight.id,
+				flight.flight_number,
+				flight.status,
+				flight.sta,
+				flight.eta,
+				flight.city,
+				flight.airline,
+				flight.created_at,
+				flight.updated_at
+			)
+		}
+
+		await sendTelegramMessage(
+			chatId,
+			`✅ Added ${fakeFlights.length} test flights to the database.\n\n` +
+				`Use /test-tracking to see flight suggestions with the test data.`,
+			env
+		)
+	} catch (error) {
+		console.error('Error adding test data:', error)
+		await sendTelegramMessage(chatId, '❌ Failed to add test data. Please try again.', env)
+	}
 }

@@ -22,3 +22,12 @@ export type VercelFlightResponse = {
 export type VercelApiResponse = {
 	Flights: VercelFlightResponse[]
 }
+
+export interface InlineKeyboardButton {
+	text: string
+	callback_data: string
+}
+
+export interface InlineKeyboardMarkup {
+	inline_keyboard: InlineKeyboardButton[][]
+}

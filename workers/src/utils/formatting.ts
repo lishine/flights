@@ -1,7 +1,7 @@
 import { getUserTrackedFlightsWithData } from '../services/flightData'
 import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../env'
-import type { Flight } from '../types'
+import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup } from '../types'
 
 // Helper function to format time from timestamp
 export const formatTimeFromTimestamp = (timestamp: number) => {
@@ -92,6 +92,8 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 		}
 	}
 	let message = '🎯 *Suggested Flights to Track:*\n\nThese flights arrive in 1+ hours:\n\n'
+	const inlineKeyboard: InlineKeyboardButton[][] = []
+
 	flights.forEach((flight, index) => {
 		let formattedTime = 'TBA'
 		let dayLabel = ''
@@ -105,20 +107,31 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 		message += `   City: ${escapeMarkdown(flight.city || 'Unknown')}\n`
 		message += `   Airline: ${escapeMarkdown(flight.airline || 'Unknown')}\n`
 		message += `   ⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
+
+		// Add individual track button for each flight
+		inlineKeyboard.push([
+			{
+				text: `✈️ Track ${flight.flight_number}`,
+				callback_data: `track_single:${flight.flight_number}`,
+			},
+		])
 	})
+
 	message += `Use: \`/track ${flights.map((f) => escapeMarkdown(f.flight_number)).join(' ')}\`\n`
 	message += `Or track individually: \`/track LY086\``
+
+	// Add "Track All" button at the bottom
+	inlineKeyboard.push([
+		{
+			text: '✈️ Track All Suggested',
+			callback_data: `track_suggested:${flights.map((f) => f.flight_number).join(',')}`,
+		},
+	])
+
 	return {
 		text: message,
 		replyMarkup: {
-			inline_keyboard: [
-				[
-					{
-						text: '✈️ Track All Suggested',
-						callback_data: `track_suggested:${flights.map((f) => f.flight_number).join(',')}`,
-					},
-				],
-			],
+			inline_keyboard: inlineKeyboard,
 		},
 	}
 }
