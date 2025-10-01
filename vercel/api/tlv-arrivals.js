@@ -14,14 +14,6 @@ function parseTimestamp(dateTimeString) {
 	return parseInt(match[1])
 }
 
-// Get current time in Israel timezone (handles DST automatically)
-function getCurrentIdtTime() {
-	// Create a date object for Israel timezone
-	const now = new Date()
-	const israelTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
-	return israelTime
-}
-
 async function getBrowser() {
 	if (cachedBrowser && cachedBrowser.connected) {
 		console.log('Reusing cached browser')
@@ -88,6 +80,7 @@ async function getBrowser() {
 }
 
 export default async function handler(req, res) {
+	const startTime = Date.now()
 	let page = null
 
 	try {
@@ -163,7 +156,7 @@ export default async function handler(req, res) {
 					const url = response.url()
 
 					if (url.includes('FlightBoardSurface/Search')) {
-						console.log(`Found target response`)
+						console.log(`Found target response after ${Date.now() - startTime}ms`)
 						clearTimeout(timeout)
 						responseReceived = true
 
@@ -181,7 +174,7 @@ export default async function handler(req, res) {
 			})
 		})
 
-		console.log(`Navigating to page...`)
+		console.log(`Navigating to page... (${Date.now() - startTime}ms)`)
 
 		// Navigate with minimal wait
 		await page.goto('https://www.iaa.gov.il/en/airports/ben-gurion/flight-board/?flightType=arrivals', {
@@ -189,57 +182,41 @@ export default async function handler(req, res) {
 			timeout: 8000, // Quick timeout
 		})
 
-		console.log(`Page loaded, waiting for API response...`)
+		console.log(`Page loaded, waiting for API response... (${Date.now() - startTime}ms)`)
 
 		// Wait for the API response
 		await responsePromise
 
 		if (!flightData) {
-			console.log(`No data received`)
+			console.log(`No data received after ${Date.now() - startTime}ms`)
 			return res.status(500).json({
 				error: 'Did not capture FlightBoardSurface/Search response',
+				timing: `${Date.now() - startTime}ms`,
 			})
 		}
 
-		console.log(`Success!`)
+		console.log(`Success! Total time: ${Date.now() - startTime}ms`)
 
-		// Transform flight data to parse timestamps and return simplified format
-		const nowIdt = getCurrentIdtTime()
-
-		// Calculate time window: 1 hour before now to 12 hours after now
-		const oneHourAgo = new Date(nowIdt.getTime() - 60 * 60 * 1000)
-		const twelveHoursFromNow = new Date(nowIdt.getTime() + 12 * 60 * 60 * 1000)
-
+		// Transform flight data to parse timestamps
 		const transformedFlights =
-			flightData.Flights?.map((flight) => {
-				const scheduledArrival = parseTimestamp(flight.ScheduledDateTime)
-				const estimatedArrival = parseTimestamp(flight.UpdatedDateTime)
-
-				return {
-					fln: flight.Flight.replace(' ', ''),
-					status: flight.Status,
-					sta: scheduledArrival,
-					eta: estimatedArrival,
-					city: flight.City,
-					airline: flight.Airline,
-				}
-			}) ||
-			// .filter((flight) => {
-			// 	// Filter to flights within time window: 1hr before now to 12hr after now
-			// 	if (!flight.sta) return false
-
-			// 	const scheduledTime = new Date(flight.sta)
-			// 	return scheduledTime >= oneHourAgo && scheduledTime <= twelveHoursFromNow
-			// }) ||
-			[]
+			flightData.Flights?.map((flight) => ({
+				...flight,
+				ScheduledDateTime: parseTimestamp(flight.ScheduledDateTime),
+				UpdatedDateTime: parseTimestamp(flight.UpdatedDateTime),
+			})) || []
 
 		res.status(200).json({
 			Flights: transformedFlights,
+			_metadata: {
+				executionTime: `${Date.now() - startTime}ms`,
+				timestamp: new Date().toISOString(),
+			},
 		})
 	} catch (err) {
-		console.error(`Error:`, err)
+		console.error(`Error after ${Date.now() - startTime}ms:`, err)
 		res.status(500).json({
 			error: err.message,
+			timing: `${Date.now() - startTime}ms`,
 		})
 	} finally {
 		// Close page but keep browser alive for next request
