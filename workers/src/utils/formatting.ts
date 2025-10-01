@@ -107,13 +107,8 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 		message += `   City: ${escapeMarkdown(flight.city || 'Unknown')}\n`
 		message += `   Airline: ${escapeMarkdown(flight.airline || 'Unknown')}\n`
 		message += `   ⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
-	})
 
-	message += `Use: \`/track ${flights.map((f) => escapeMarkdown(f.flight_number)).join(' ')}\`\n`
-	message += `Or use the buttons below to track flights individually or all at once.`
-
-	// Create buttons with flight numbers for clarity
-	flights.forEach((flight) => {
+		// Add individual track button for each flight
 		inlineKeyboard.push([
 			{
 				text: `✈️ Track ${flight.flight_number}`,
@@ -121,6 +116,9 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 			},
 		])
 	})
+
+	message += `Use: \`/track ${flights.map((f) => escapeMarkdown(f.flight_number)).join(' ')}\`\n`
+	message += `Or track individually: \`/track LY086\``
 
 	// Add "Track All" button at the bottom
 	inlineKeyboard.push([
