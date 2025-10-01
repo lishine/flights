@@ -244,7 +244,7 @@ const handleTracked = async (chatId: number, env: Env, ctx: DurableObjectState) 
 }
 
 const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectState) => {
-	const clearedCount = await clearUserTracking(chatId, env, ctx)
+	const clearedCount = clearUserTracking(chatId, env, ctx)
 	const message =
 		clearedCount > 0
 			? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.`
