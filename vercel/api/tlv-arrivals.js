@@ -161,6 +161,7 @@ export default async function handler(req, res) {
 			page.on('response', async (response) => {
 				try {
 					const url = response.url()
+					console.log({ url: url })
 
 					if (url.includes('FlightBoardSurface/Search')) {
 						console.log(`Found target response`)
