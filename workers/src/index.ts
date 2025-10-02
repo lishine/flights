@@ -15,7 +15,7 @@ export default {
 			return dbStub.fetch(request)
 		}
 
-		console.log('worker request')
+		console.log('wwwwwworker request')
 
 		if (request.method === 'POST' && url.pathname === '/deploy-webhook') {
 			try {
@@ -69,7 +69,7 @@ export default {
 
 		// Default response with API information
 		const apiInfo = {
-			name: 'Flights API',
+			name: 'fFlights API',
 			status: 'running',
 			endpoints: {
 				health: 'GET /health - Service health check',
