@@ -36,7 +36,7 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 	let statusMessage = '📊 *System Status*\n\n'
 
 	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
-	if (lastUpdated?.value && timestamp > 0 && timestamp < getCurrentIdtTime().getTime()) {
+	if (lastUpdated?.value && timestamp > 0) {
 		const lastUpdate = formatTimestampForDisplay(timestamp)
 		const timeAgo = formatTimeAgo(timestamp)
 		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
