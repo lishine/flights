@@ -36,3 +36,22 @@ cd workers && pnpm install
 # Install dependencies for vercel
 cd vercel && pnpm install
 ```
+
+## Code Quality
+
+The project uses Prettier for code formatting:
+
+```bash
+# Check formatting
+pnpm prettier --check .
+
+# Fix formatting
+pnpm prettier --write .
+```
+
+## Contributing
+
+1. Make changes on a feature branch
+2. Ensure code is properly formatted
+3. Commit with descriptive messages
+4. Create a pull request for review
