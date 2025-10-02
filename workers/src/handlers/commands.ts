@@ -152,16 +152,26 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
 				})
 			}
-			await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					chat_id: chatId,
-					message_id: messageId,
-					text: results.join('\n'),
-					parse_mode: 'Markdown',
-				}),
-			})
+			try {
+				await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						chat_id: chatId,
+						message_id: messageId,
+						text: results.join('\n'),
+						parse_mode: 'Markdown',
+					}),
+				})
+			} catch (error) {
+				console.error('Failed to edit message for track_suggested:', {
+					chatId,
+					messageId,
+					results,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
 			return new Response('OK')
 		}
 
@@ -220,17 +230,27 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 			}
 
-			await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					chat_id: chatId,
-					message_id: messageId,
-					text: responseText,
-					parse_mode: 'Markdown',
-					reply_markup: finalMarkup,
-				}),
-			})
+			try {
+				await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						chat_id: chatId,
+						message_id: messageId,
+						text: responseText,
+						parse_mode: 'Markdown',
+						reply_markup: finalMarkup,
+					}),
+				})
+			} catch (error) {
+				console.error('Failed to edit message for untrack_single:', {
+					chatId,
+					messageId,
+					responseText,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
 			return new Response('OK')
 		}
 
@@ -282,17 +302,28 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
 			})
 		}
-		await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				chat_id: chatId,
-				message_id: messageId,
-				text: responseText,
-				parse_mode: 'Markdown',
-				reply_markup: replyMarkup,
-			}),
-		})
+		try {
+			await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					chat_id: chatId,
+					message_id: messageId,
+					text: responseText,
+					parse_mode: 'Markdown',
+					reply_markup: replyMarkup,
+				}),
+			})
+		} catch (error) {
+			console.error('Failed to edit message for general callback:', {
+				chatId,
+				messageId,
+				data,
+				responseText,
+				error: error instanceof Error ? error.message : 'Unknown error',
+				status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+			})
+		}
 		return new Response('OK')
 	}
 
