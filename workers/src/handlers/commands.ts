@@ -315,14 +315,18 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				}),
 			})
 		} catch (error) {
-			console.error('Failed to edit message for general callback:', {
-				chatId,
-				messageId,
-				data,
-				responseText,
-				error: error instanceof Error ? error.message : 'Unknown error',
-				status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-			})
+			// Telegram returns 400 if message content is identical - this is expected and not an error
+			const is400Error = error instanceof Error && 'status' in error && (error as any).status === 400
+			if (!is400Error) {
+				console.error('Failed to edit message for general callback:', {
+					chatId,
+					messageId,
+					data,
+					responseText,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
 		}
 		return new Response('OK')
 	}
