@@ -74,11 +74,25 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 	if ('callback_query' in update && update.callback_query) {
 		const callbackQuery = update.callback_query
 		if (!callbackQuery.message) {
-			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Message too old' }),
-			})
+			// Try to answer the callback query but handle the case where the message is too old
+			try {
+				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						callback_query_id: callbackQuery.id,
+						text: 'This message is too old to interact with',
+						show_alert: true,
+					}),
+				})
+			} catch (error) {
+				console.error('Failed to answer callback query for old message:', {
+					callbackQueryId: callbackQuery.id,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+				// Don't rethrow - just log the error since we can't handle old messages anyway
+			}
 			return new Response('OK')
 		}
 
@@ -86,11 +100,23 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		const messageId = callbackQuery.message.message_id
 
 		if (!isDataQuery(callbackQuery)) {
-			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Unsupported callback type' }),
-			})
+			try {
+				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						callback_query_id: callbackQuery.id,
+						text: 'Unsupported callback type',
+						show_alert: true,
+					}),
+				})
+			} catch (error) {
+				console.error('Failed to answer unsupported callback query:', {
+					callbackQueryId: callbackQuery.id,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
 			return new Response('OK')
 		}
 
@@ -112,11 +138,20 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 					results.push(`❌ Invalid flight code: ${code}`)
 				}
 			}
-			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flights...' }),
-			})
+			try {
+				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flights...' }),
+				})
+			} catch (error) {
+				console.error('Failed to answer track_suggested callback query:', {
+					callbackQueryId: callbackQuery.id,
+					flightCodes,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
 			await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -135,11 +170,20 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			// Reuse handleTrack function by constructing a command-like text
 			await handleTrack(chatId, `/track ${flightNumber}`, env, ctx)
 
-			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flight...' }),
-			})
+			try {
+				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flight...' }),
+				})
+			} catch (error) {
+				console.error('Failed to answer track_single callback query:', {
+					callbackQueryId: callbackQuery.id,
+					flightNumber,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
 			// Don't need to edit the message since handleTrack will send a new one
 			return new Response('OK')
 		}
@@ -148,11 +192,20 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const flightId = data.split(':')[1]
 			await handleUntrack(chatId, flightId, env, ctx)
 
-			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Untracking flight...' }),
-			})
+			try {
+				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Untracking flight...' }),
+				})
+			} catch (error) {
+				console.error('Failed to answer untrack_single callback query:', {
+					callbackQueryId: callbackQuery.id,
+					flightId,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
 
 			// Update the message to show the new tracked flights list
 			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
@@ -215,11 +268,20 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				],
 			}
 		}
-		await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ callback_query_id: callbackQuery.id, text: '🔄 Refreshing...' }),
-		})
+		try {
+			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: '🔄 Refreshing...' }),
+			})
+		} catch (error) {
+			console.error('Failed to answer general callback query:', {
+				callbackQueryId: callbackQuery.id,
+				data,
+				error: error instanceof Error ? error.message : 'Unknown error',
+				status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+			})
+		}
 		await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
