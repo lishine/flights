@@ -35,7 +35,7 @@ export const getDayLabelFromTimestamp = (timestamp: number) => {
 }
 
 export const formatTrackingList = async (userFlights: string[], env: Env) => {
-	if (userFlights.length === 0) return "You're not tracking any flights. Use /track LY086 to start!"
+	if (userFlights.length === 0) return "You're not tracking any flights.\nUse /track LY086 to start!"
 
 	// Use the optimized function to get flight data in a single query
 	const chatId = parseInt(userFlights[0].split('_')[0]) // Extract chat ID from first flight ID (this is a hack, need to pass chatId properly)
@@ -53,7 +53,7 @@ export const formatTrackingListOptimized = (
 
 	if (flights.length === 0)
 		return {
-			text: "You're not tracking any flights. Use /track LY086 to start!",
+			text: "You're not tracking any flights.\nUse /track LY086 to start!",
 			replyMarkup: null,
 		}
 
