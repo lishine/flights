@@ -28,17 +28,26 @@ jobs:
 
             - name: Create Release
               id: create_release
-              uses: actions/create-release@v1
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  tag_name: v${{ steps.version.outputs.version }}
-                  release_name: Release v${{ steps.version.outputs.version }}
-                  body: |
-                      Automated deployment from commit ${{ github.sha }}
-                      Environment: ${{ github.event.deployment.environment }}
-                  draft: false
-                  prerelease: false
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  TAG="v${{ steps.version.outputs.version }}"
+                  
+                  # Check if tag/release already exists
+                  if gh release view "$TAG" >/dev/null 2>&1; then
+                    echo "Release $TAG already exists, skipping creation"
+                    RELEASE_URL=$(gh release view "$TAG" --json url -q .url)
+                  else
+                    # Create tag and release
+                    RELEASE_URL=$(gh release create "$TAG" \
+                      --title "Release v${{ steps.version.outputs.version }}" \
+                      --notes "Automated deployment from commit ${{ github.sha }}
+                  
+                  Environment: ${{ github.event.deployment.environment }}" \
+                      --latest | grep -o 'https://github.com[^"]*')
+                  fi
+                  
+                  echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
 
             - name: Wait for deployment to be ready
               run: sleep 10
