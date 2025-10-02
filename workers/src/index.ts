@@ -16,28 +16,26 @@ export default {
 			return dbStub.fetch(request)
 		}
 
+		console.log('worker request')
+
 		if (request.method === 'POST' && url.pathname === '/deploy-webhook') {
 			try {
+				console.log('deploy-webhook')
 				const version = versionData.version
 				const updateDate = versionData.update_date
 				const message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${new Date().toUTCString()}`
-				
-				await sendTelegramMessage(
-					parseInt(env.ADMIN_CHAT_ID),
-					message,
-					env,
-					false
-				)
-				
+				console.log({ 'env.ADMIN_CHAT_ID': env.ADMIN_CHAT_ID })
+				await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
+
 				return new Response(JSON.stringify({ success: true, version }), {
 					status: 200,
-					headers: { 'Content-Type': 'application/json' }
+					headers: { 'Content-Type': 'application/json' },
 				})
 			} catch (error) {
 				console.error('Deploy webhook error:', error)
 				return new Response(JSON.stringify({ error: 'Failed to send notification' }), {
 					status: 500,
-					headers: { 'Content-Type': 'application/json' }
+					headers: { 'Content-Type': 'application/json' },
 				})
 			}
 		}
