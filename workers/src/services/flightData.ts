@@ -113,7 +113,7 @@ export const getNotTrackedFlights = (chatId: number, ctx: DurableObjectState) =>
 	const result = ctx.storage.sql.exec(
 		`
 		SELECT f.* FROM flights f
-		LEFT JOIN subscriptions s ON f.id = s.flight_id AND s.telegram_id = ? AND s.auto_cleanup_at IS NULL
+		LEFT JOIN subscriptions s ON f.id = s.flight_id AND s.telegram_id = ?
 		WHERE s.flight_id IS NULL
 		ORDER BY f.eta ASC
 		`,
