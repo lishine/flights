@@ -11,6 +11,7 @@ import { initializeSchema } from '../schema'
 import { sendFlightAlerts } from './alerts'
 import type { Env } from '../env'
 import type { Flight } from '../types'
+import { getCurrentIdtTime } from '../utils/dateTime'
 
 export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 	try {
@@ -18,7 +19,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 
 		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
-		
+
 		writeStatusData(ctx, currentFlights.length)
 		writeFlightsData(currentFlights, ctx)
 
@@ -29,7 +30,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 			ORDER BY f.eta DESC
 		`)
 		const previousFlights = result.toArray() as Flight[]
-		
+
 		console.log(`Found ${previousFlights.length} subscribed flights`)
 
 		// Build maps for change detection
@@ -59,13 +60,13 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		const lastCleanupResult = ctx.storage.sql.exec("SELECT value FROM status WHERE key = 'last_cleanup_time'")
 		const lastCleanupRow = lastCleanupResult.toArray()[0] as { value: string } | undefined
 		const lastCleanupTime = lastCleanupRow ? parseInt(lastCleanupRow.value) : 0
-		const now = Date.now()
+		const now = getCurrentIdtTime().getTime()
 		const tenMinutes = 10 * 60 * 1000
-		
+
 		if (now - lastCleanupTime >= tenMinutes) {
 			console.log('Running cleanup (10 minute interval)')
 			cleanupCompletedFlights(env, ctx)
-			
+
 			// Update last cleanup time
 			ctx.storage.sql.exec(
 				"INSERT INTO status (key, value) VALUES ('last_cleanup_time', ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",

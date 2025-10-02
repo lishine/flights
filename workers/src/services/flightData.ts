@@ -126,21 +126,22 @@ export const getNotTrackedFlights = (chatId: number, ctx: DurableObjectState) =>
 /**
  * Clean up subscriptions for completed flights
  * Criteria: LANDED, CANCELED, or ETA passed by 1+ hours
- * 
- * This runs independently of the API feed, so it works even if 
+ *
+ * This runs independently of the API feed, so it works even if
  * flights are no longer returned by the API
  */
 export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState) => {
 	const nowIdt = getCurrentIdtTime()
 	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago
-	
+
 	console.log(`Cleanup: cutoff=${new Date(cutoffTimestamp).toLocaleString()}`)
 
 	// Delete subscriptions where:
 	// 1. Flight is LANDED or CANCELED, OR
 	// 2. Flight ETA is more than 1 hour ago (regardless of status)
 	// Uses JOIN for better performance and RETURNING to get count in single query
-	const result = ctx.storage.sql.exec(`
+	const result = ctx.storage.sql.exec(
+		`
 		DELETE FROM subscriptions 
 		WHERE rowid IN (
 			SELECT s.rowid 
@@ -150,8 +151,10 @@ export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState) => {
 			   OR f.eta < ?
 		)
 		RETURNING flight_id
-	`, cutoffTimestamp)
-	
+	`,
+		cutoffTimestamp
+	)
+
 	const count = result.toArray().length
 	console.log(`Cleanup: deleted ${count} subscription(s)`)
 	return count
@@ -208,7 +211,7 @@ export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState) => {
 }
 
 export const writeStatusData = (ctx: DurableObjectState, flightCount: number) => {
-	const timestamp = Date.now().toString() // Store as milliseconds timestamp
+	const timestamp = getCurrentIdtTime().getTime().toString() // Store as milliseconds timestamp
 
 	// Increment update counter
 	ctx.storage.sql.exec(

@@ -4,7 +4,7 @@ import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights } from '
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
-import { getTelegramUrl } from '../utils/constants'
+import { CRON_PERIOD_SECONDS, getTelegramUrl } from '../utils/constants'
 import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
 import { ofetch } from 'ofetch'
@@ -34,14 +34,14 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 	// Build unified status message
 	let statusMessage = '📊 *System Status*\n\n'
-	
+
 	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
-	if (lastUpdated?.value && timestamp > 0 && timestamp < Date.now()) {
+	if (lastUpdated?.value && timestamp > 0 && timestamp < getCurrentIdtTime().getTime()) {
 		const lastUpdate = formatTimestampForDisplay(timestamp)
 		const timeAgo = formatTimeAgo(timestamp)
 		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
 		const flightsCount = dataLength?.value ? parseInt(dataLength.value) || 0 : 0
-		
+
 		statusMessage +=
 			`✅ System: Online\n\n` +
 			`📅 Last updated: ${lastUpdate} (${timeAgo})\n` +
@@ -50,7 +50,8 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 			`📦 Version: ${versionData.version}\n` +
 			`📦 Code updated: ${versionData.update_date}\n`
 	} else {
-		statusMessage += '🔶 System: Starting up\n\n' +
+		statusMessage +=
+			'🔶 System: Starting up\n\n' +
 			`📦 Version: ${versionData.version}\n` +
 			`📦 Code updated: ${versionData.update_date}\n`
 	}
@@ -62,7 +63,7 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 		statusMessage += `\n\n⚠️ Last error: ${errorTime}`
 	}
 
-	const responseText = statusMessage + '\n\n_Data refreshes every 2 minutes_'
+	const responseText = statusMessage + `\n\n_Data refreshes every ${CRON_PERIOD_SECONDS} seconds`
 
 	return responseText
 }

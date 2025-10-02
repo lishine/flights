@@ -3,6 +3,7 @@ import { Env } from './env'
 import { runScheduledJob } from './handlers/cron'
 import { handleCommand } from './handlers/commands'
 import { resetSchema } from './schema'
+import { CRON_PERIOD_SECONDS } from './utils/constants'
 
 export class FlightDO extends DurableObject<Env> {
 	private alarmCount: number = 0
@@ -17,7 +18,7 @@ export class FlightDO extends DurableObject<Env> {
 			let currentAlarm = await ctx.storage.getAlarm()
 			if (currentAlarm == null) {
 				console.log('constructor currentAlarm == null')
-				const oneMinute = 60 * 1000 // 1 minute in milliseconds
+				const oneMinute = CRON_PERIOD_SECONDS * 1000 // 1 minute in milliseconds
 				console.log(`Setting initial alarm for ${oneMinute}ms from now`)
 				await ctx.storage.setAlarm(Date.now() + oneMinute)
 			}
@@ -77,9 +78,9 @@ export class FlightDO extends DurableObject<Env> {
 
 		this.setAlarmCount(newCount)
 
-		const twoMinutes = 60 * 1000
-		console.log(`Setting next alarm for ${twoMinutes}ms from now`)
-		await this.ctx.storage.setAlarm(Date.now() + twoMinutes)
+		const period = CRON_PERIOD_SECONDS * 1000
+		console.log(`Setting next alarm for ${period}ms from now`)
+		await this.ctx.storage.setAlarm(Date.now() + period)
 	}
 
 	/**
