@@ -57,7 +57,7 @@ export const formatTrackingListOptimized = (
 			replyMarkup: null,
 		}
 
-	let message = '✈️ *Your Tracked Flights:*\n\n'
+	let message = ''
 	for (const flight of flights) {
 		// Extract flight number from flight ID (format: "LY086_1698765432")
 		const flightNum = flight.flight_number
