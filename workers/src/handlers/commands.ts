@@ -32,46 +32,37 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 	const errorData = errorResultRow?.value
 
-	// Build flight data section
-	let flightDataSection = ''
-	const lastUpdateTimestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
-	if (lastUpdated?.value && lastUpdateTimestamp > 0 && lastUpdateTimestamp < Date.now()) {
-		const lastUpdate = formatTimestampForDisplay(lastUpdateTimestamp)
-		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
-		const flightsCount = dataLength?.value ? parseInt(dataLength.value) || 0 : 0
-		flightDataSection =
-			`🛩️ *Latest Flight Data*\n\n` +
-			`📅 Updated: ${lastUpdate}\n` +
-			`🔢 Total fetches: ${totalFetches}\n` +
-			`📊 Flights count: ${flightsCount}\n\n`
-	} else {
-		flightDataSection = '❌ No flight data available yet\n\n'
-	}
-
-	// Build system status section
-	let statusSection = '📊 *System Status*\n\n'
+	// Build unified status message
+	let statusMessage = '📊 *System Status*\n\n'
+	
 	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
 	if (lastUpdated?.value && timestamp > 0 && timestamp < Date.now()) {
+		const lastUpdate = formatTimestampForDisplay(timestamp)
 		const timeAgo = formatTimeAgo(timestamp)
 		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
-		statusSection +=
+		const flightsCount = dataLength?.value ? parseInt(dataLength.value) || 0 : 0
+		
+		statusMessage +=
 			`✅ System: Online\n\n` +
-			`⏱️ Last update: ${timeAgo}\n\n` +
-			`🔢 Total fetches: ${totalFetches}\n` +
+			`📅 Last updated: ${lastUpdate} (${timeAgo})\n` +
+			`📊 Flights count: ${flightsCount}\n` +
+			`🔢 Total fetches: ${totalFetches}\n\n` +
 			`📦 Version: ${versionData.version}\n` +
 			`📦 Code updated: ${versionData.update_date}\n`
 	} else {
-		statusSection += '🔶 System: Starting up'
+		statusMessage += '🔶 System: Starting up\n\n' +
+			`📦 Version: ${versionData.version}\n` +
+			`📦 Code updated: ${versionData.update_date}\n`
 	}
 
 	// Add error information if present
 	if (errorData) {
 		const error = JSON.parse(errorData)
 		const errorTime = new Date(error.timestamp).toLocaleString()
-		statusSection += `\n\n⚠️ Last error: ${errorTime}`
+		statusMessage += `\n\n⚠️ Last error: ${errorTime}`
 	}
 
-	const responseText = flightDataSection + statusSection + '\n\n_Data refreshes every 2 minutes_'
+	const responseText = statusMessage + '\n\n_Data refreshes every 2 minutes_'
 
 	return responseText
 }

@@ -208,23 +208,26 @@ export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState) => {
 }
 
 export const writeStatusData = (ctx: DurableObjectState, flightCount: number) => {
-	const timestamp = getCurrentIdtTime().toISOString()
+	const timestamp = Date.now().toString() // Store as milliseconds timestamp
 
+	// Increment update counter
 	ctx.storage.sql.exec(
-		"INSERT INTO status (key, value) VALUES ('update-counter', '1') ON CONFLICT(key) DO UPDATE SET value = CAST((CAST(value AS INTEGER) + 1) AS TEXT)"
+		"INSERT INTO status (key, value) VALUES ('updateCount', '1') ON CONFLICT(key) DO UPDATE SET value = CAST((CAST(value AS INTEGER) + 1) AS TEXT)"
 	)
 
+	// Store last updated timestamp
 	ctx.storage.sql.exec(
 		'INSERT INTO status (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value',
 		'lastUpdated',
 		timestamp
 	)
 
+	// Store flight count
 	if (flightCount !== undefined) {
 		ctx.storage.sql.exec(
 			'INSERT INTO status (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value',
 			'dataLength',
-			flightCount
+			flightCount.toString()
 		)
 	}
 }
