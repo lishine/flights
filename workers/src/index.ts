@@ -1,7 +1,6 @@
 import { FlightDO } from './durable'
 import { Env } from './env'
 import { sendTelegramMessage } from './services/telegram'
-import versionData from '../version.json'
 
 // Export the Durable Object class so the runtime can find it
 export { FlightDO }
@@ -21,8 +20,9 @@ export default {
 		if (request.method === 'POST' && url.pathname === '/deploy-webhook') {
 			try {
 				console.log('deploy-webhook')
-				const version = versionData.version
-				const updateDate = versionData.update_date
+				const body = await request.json() as { version: string; update_date: string }
+				const version = body.version
+				const updateDate = body.update_date
 				const message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${new Date().toUTCString()}`
 				console.log({ 'env.ADMIN_CHAT_ID': env.ADMIN_CHAT_ID })
 				await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)

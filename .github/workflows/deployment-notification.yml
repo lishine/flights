@@ -9,11 +9,19 @@ jobs:
         if: github.event.deployment_status.state == 'success'
 
         steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event.deployment.ref }}
+
             - name: Wait for deployment to be ready
-              run: sleep 10
+              run: sleep 1
 
             - name: Call deploy webhook
               run: |
+                  VERSION=$(cat workers/version.json | jq -r '.version')
+                  UPDATE_DATE=$(cat workers/version.json | jq -r '.update_date')
                   curl -X POST "https://flights.vim55k.workers.dev/deploy-webhook" \
                     -H "Content-Type: application/json" \
+                    -d "{\"version\":\"$VERSION\",\"update_date\":\"$UPDATE_DATE\"}" \
                     -w "\nHTTP Status: %{http_code}\n"
