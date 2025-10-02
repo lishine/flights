@@ -8,7 +8,6 @@ import { CRON_PERIOD_SECONDS, getTelegramUrl } from '../utils/constants'
 import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
 import { ofetch } from 'ofetch'
-import versionData from '../../version.json'
 
 export const isDataQuery = (query: CallbackQuery) => {
 	return 'data' in query
@@ -19,7 +18,10 @@ export const isTextMessage = (message: Message) => {
 }
 
 // Shared function to build status message - eliminates code duplication
-const buildStatusMessage = (ctx: DurableObjectState) => {
+const buildStatusMessage = async (env: Env, ctx: DurableObjectState) => {
+	const version = await env.METADATA.get('version') || 'Unknown'
+	const lastDeployDate = await env.METADATA.get('last_deploy_date') || 'Unknown'
+	
 	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
 	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
 	const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
@@ -47,13 +49,13 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 			`📅 Last updated: ${escapeMarkdown(lastUpdate)} (${escapeMarkdown(timeAgo)})\n` +
 			`📊 Flights count: ${flightsCount}\n` +
 			`🔢 Total fetches: ${totalFetches}\n\n` +
-			`📦 Version: ${escapeMarkdown(versionData.version)}\n` +
-			`📦 Code updated: ${escapeMarkdown(versionData.update_date)}\n`
+			`📦 Version: ${escapeMarkdown(version)}\n` +
+			`📦 Code updated: ${escapeMarkdown(lastDeployDate)}\n`
 	} else {
 		statusMessage +=
 			'🔶 System: Starting up\n\n' +
-			`📦 Version: ${escapeMarkdown(versionData.version)}\n` +
-			`📦 Code updated: ${escapeMarkdown(versionData.update_date)}\n`
+			`📦 Version: ${escapeMarkdown(version)}\n` +
+			`📦 Code updated: ${escapeMarkdown(lastDeployDate)}\n`
 	}
 
 	// Add error information if present
@@ -257,7 +259,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		let responseText = ''
 		let replyMarkup = null
 		if (data === 'get_status') {
-			responseText = buildStatusMessage(ctx)
+			responseText = await buildStatusMessage(env, ctx)
 			replyMarkup = {
 				inline_keyboard: [
 					[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
@@ -352,14 +354,17 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		const command = text.split(' ')[0]
 		const handler =
 			commands[command] ||
-			(() =>
-				sendTelegramMessage(
+			(async () => {
+				const version = await env.METADATA.get('version') || 'Unknown'
+				const lastDeployDate = await env.METADATA.get('last_deploy_date') || 'Unknown'
+				await sendTelegramMessage(
 					chatId,
 					`Unknown command.\n` +
-						`📦 Version: ${versionData.version}\n` +
-						`📦 Code updated: ${versionData.update_date}\n`,
+						`📦 Version: ${version}\n` +
+						`📦 Code updated: ${lastDeployDate}\n`,
 					env
-				))
+				)
+			})
 		await handler()
 		return new Response('OK')
 	}
@@ -409,7 +414,7 @@ const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectSt
 
 const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) => {
 	// Build the main status message
-	const responseText = buildStatusMessage(ctx)
+	const responseText = await buildStatusMessage(env, ctx)
 
 	// Build inline keyboard with action buttons
 	const inlineKeyboard = [

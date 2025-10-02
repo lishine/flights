@@ -3,6 +3,10 @@ main = "dist/worker.js"
 compatibility_date = "2025-09-24"
 observability = { enabled = true }
 
+[[kv_namespaces]]
+binding = "METADATA"
+id = "89fa0007bfc2442f9f73fe9642687f47"
+
 [[durable_objects.bindings]]
 name = "FLIGHTS_DO"
 class_name = "FlightDO"

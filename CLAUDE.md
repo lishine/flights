@@ -9,21 +9,27 @@
 
 - `/workers` - Cloudflare Worker source code
 - `/workers/src` - TypeScript source files
-- `/workers/version.json` - Version tracking (auto-updated by git post-commit hook)
-- `/.github/workflows` - GitHub Actions for deployment notifications
+- `/.github/workflows` - GitHub Actions for deployment notifications and releases
 
 ## Version Management
 
-The project uses automatic version management:
-- Git post-commit hook updates `workers/version.json`
-- Version format: `{major}.{minor}.{commit_count}`
-- Committed with `--amend` to include in the same commit
+The project uses automatic version management via GitHub Actions:
+- Version format: `1.0.{commit_count}`
+- Version is calculated from total commit count on each deployment
+- Stored in Cloudflare KV (`env.METADATA`)
+- No local git hooks required
 
 ## Deployment Flow
 
-1. Commit changes (version.json auto-updates via post-commit hook)
-2. Push to GitHub
-3. Cloudflare auto-deploys
-4. GitHub Action detects successful deployment
-5. Calls `/deploy-webhook` endpoint
-6. Worker sends Telegram notification with version number
+1. Push to GitHub (from any environment)
+2. Cloudflare auto-deploys
+3. GitHub Action detects successful deployment
+4. GitHub Action creates a Release with tag (e.g., `v1.0.107`)
+5. GitHub Action calls `/deploy-webhook` endpoint with version + release URL
+6. Worker saves version to KV and sends Telegram notification with release link
+
+## KV Storage
+
+- **METADATA** namespace stores deployment metadata:
+  - `version` - Current deployed version
+  - `last_deploy_date` - Date of last deployment

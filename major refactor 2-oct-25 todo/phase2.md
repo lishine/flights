@@ -1,3 +1,5 @@
+to protect vercel url as well
+
 # Phase 2: Security Infrastructure
 
 **Estimated Time**: 1 hour  
@@ -20,19 +22,19 @@ import type { Env } from '../env'
  */
 export const validateWebhookSecret = (receivedSecret: string | null, expectedSecret: string): boolean => {
 	if (!receivedSecret) return false
-	
+
 	// Convert to buffers for constant-time comparison
 	const received = new TextEncoder().encode(receivedSecret)
 	const expected = new TextEncoder().encode(expectedSecret)
-	
+
 	if (received.length !== expected.length) return false
-	
+
 	// Constant-time comparison
 	let result = 0
 	for (let i = 0; i < received.length; i++) {
 		result |= received[i] ^ expected[i]
 	}
-	
+
 	return result === 0
 }
 
@@ -41,7 +43,7 @@ export const validateWebhookSecret = (receivedSecret: string | null, expectedSec
  */
 export const isAdmin = (chatId: number | undefined, env: Env): boolean => {
 	if (!chatId) return false
-	const adminIds = env.ADMIN_CHAT_IDS.split(',').map(id => parseInt(id.trim()))
+	const adminIds = env.ADMIN_CHAT_IDS.split(',').map((id) => parseInt(id.trim()))
 	return adminIds.includes(chatId)
 }
 
@@ -77,12 +79,12 @@ interface RateLimitConfig {
 
 const USER_LIMIT: RateLimitConfig = {
 	maxRequests: 10,
-	windowSeconds: 60
+	windowSeconds: 60,
 }
 
 const IP_LIMIT: RateLimitConfig = {
 	maxRequests: 50,
-	windowSeconds: 60
+	windowSeconds: 60,
 }
 
 /**
@@ -91,13 +93,12 @@ const IP_LIMIT: RateLimitConfig = {
 const checkLimit = (key: string, config: RateLimitConfig, ctx: DurableObjectState): boolean => {
 	const now = Math.floor(Date.now() / 1000)
 	const windowStart = now - config.windowSeconds
-	
+
 	// Get current count
-	const result = ctx.storage.sql.exec(
-		'SELECT count, reset_at FROM rate_limits WHERE key = ?',
-		key
-	).one() as { count: number; reset_at: number } | undefined
-	
+	const result = ctx.storage.sql.exec('SELECT count, reset_at FROM rate_limits WHERE key = ?', key).one() as
+		| { count: number; reset_at: number }
+		| undefined
+
 	if (!result) {
 		// First request - create entry
 		ctx.storage.sql.exec(
@@ -107,7 +108,7 @@ const checkLimit = (key: string, config: RateLimitConfig, ctx: DurableObjectStat
 		)
 		return true
 	}
-	
+
 	// Check if window expired
 	if (result.reset_at <= now) {
 		// Reset window
@@ -118,37 +119,38 @@ const checkLimit = (key: string, config: RateLimitConfig, ctx: DurableObjectStat
 		)
 		return true
 	}
-	
+
 	// Check if under limit
 	if (result.count >= config.maxRequests) {
 		return false
 	}
-	
+
 	// Increment count
-	ctx.storage.sql.exec(
-		'UPDATE rate_limits SET count = count + 1 WHERE key = ?',
-		key
-	)
-	
+	ctx.storage.sql.exec('UPDATE rate_limits SET count = count + 1 WHERE key = ?', key)
+
 	return true
 }
 
 /**
  * Check rate limits for user and IP
  */
-export const checkRateLimits = (chatId: number, ip: string, ctx: DurableObjectState): { allowed: boolean; reason?: string } => {
+export const checkRateLimits = (
+	chatId: number,
+	ip: string,
+	ctx: DurableObjectState
+): { allowed: boolean; reason?: string } => {
 	// Check user limit
 	const userKey = `user:${chatId}`
 	if (!checkLimit(userKey, USER_LIMIT, ctx)) {
 		return { allowed: false, reason: 'user_limit_exceeded' }
 	}
-	
+
 	// Check IP limit
 	const ipKey = `ip:${ip}`
 	if (!checkLimit(ipKey, IP_LIMIT, ctx)) {
 		return { allowed: false, reason: 'ip_limit_exceeded' }
 	}
-	
+
 	return { allowed: true }
 }
 
@@ -156,9 +158,7 @@ export const checkRateLimits = (chatId: number, ip: string, ctx: DurableObjectSt
  * Get IP address from request
  */
 export const getRequestIP = (request: Request): string => {
-	return request.headers.get('CF-Connecting-IP') || 
-	       request.headers.get('X-Forwarded-For')?.split(',')[0] || 
-	       'unknown'
+	return request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For')?.split(',')[0] || 'unknown'
 }
 ```
 
@@ -173,7 +173,7 @@ import type { Env } from '../env'
 
 export const isAdminUser = (chatId: number | undefined, env: Env): boolean => {
 	if (!chatId) return false
-	const adminIds = env.ADMIN_CHAT_IDS.split(',').map(id => parseInt(id.trim()))
+	const adminIds = env.ADMIN_CHAT_IDS.split(',').map((id) => parseInt(id.trim()))
 	return adminIds.includes(chatId)
 }
 
@@ -240,7 +240,7 @@ export const initializeSchema = (ctx: DurableObjectState) => {
 			value TEXT
 		)
 	`)
-	
+
 	// NEW: Rate limiting table
 	ctx.storage.sql.exec(`
 		CREATE TABLE IF NOT EXISTS rate_limits (
@@ -249,7 +249,7 @@ export const initializeSchema = (ctx: DurableObjectState) => {
 			reset_at INTEGER NOT NULL
 		)
 	`)
-	
+
 	ctx.storage.sql.exec(`
 		CREATE INDEX IF NOT EXISTS idx_rate_limit_reset ON rate_limits(reset_at);
 	`)
@@ -290,12 +290,12 @@ export default {
 		if (request.method === 'POST' && url.pathname === '/webhook') {
 			// SECURITY: Validate webhook secret
 			const secretToken = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
-			
+
 			if (!validateWebhookSecret(secretToken, env.WEBHOOK_SECRET)) {
 				console.error('Invalid webhook secret received')
 				return new Response('Forbidden', { status: 403 })
 			}
-			
+
 			// Forward to Durable Object
 			const dbStub = env.FLIGHTS_DO.getByName('alarm')
 			return dbStub.fetch(request)
@@ -304,7 +304,7 @@ export default {
 		if (request.method === 'GET' && url.pathname === '/reset-schema') {
 			return stub.fetch(request)
 		}
-		
+
 		return new Response(`OK`, { status: 200 })
 	},
 }
@@ -354,7 +354,7 @@ export class FlightDO extends DurableObject<Env> {
 			// SECURITY: Rate limiting
 			try {
 				const update = await request.json()
-				
+
 				// Extract chat ID for rate limiting
 				let chatId: number | undefined
 				if ('message' in update && update.message) {
@@ -362,24 +362,24 @@ export class FlightDO extends DurableObject<Env> {
 				} else if ('callback_query' in update && update.callback_query?.message) {
 					chatId = update.callback_query.message.chat.id
 				}
-				
+
 				if (chatId) {
 					const ip = getRequestIP(request)
 					const rateLimitResult = checkRateLimits(chatId, ip, this.ctx)
-					
+
 					if (!rateLimitResult.allowed) {
 						console.warn(`Rate limit exceeded for chatId ${chatId}, reason: ${rateLimitResult.reason}`)
 						return new Response('Too Many Requests', { status: 429 })
 					}
 				}
-				
+
 				// Reconstruct request with parsed JSON
 				const newRequest = new Request(request.url, {
 					method: request.method,
 					headers: request.headers,
-					body: JSON.stringify(update)
+					body: JSON.stringify(update),
 				})
-				
+
 				return handleCommand(newRequest, this.env, this.ctx)
 			} catch (error) {
 				console.error('Error processing webhook:', error)
@@ -450,20 +450,25 @@ export class FlightDO extends DurableObject<Env> {
 ## Acceptance Criteria
 
 ### ✅ Code Compiles
+
 ```bash
 cd workers
 npx tsc --noEmit
 ```
+
 No TypeScript errors.
 
 ### ✅ Build Succeeds
+
 ```bash
 cd workers
 npm run build
 ```
+
 Creates dist/worker.js without errors.
 
 ### ✅ New Files Exist
+
 ```bash
 ls workers/src/utils/security.ts
 ls workers/src/middleware/rateLimit.ts
@@ -471,6 +476,7 @@ ls workers/src/middleware/admin.ts
 ```
 
 ### ✅ Schema Updated
+
 Check `workers/src/schema.ts` includes `rate_limits` table.
 
 ---
@@ -484,6 +490,7 @@ Check `workers/src/schema.ts` includes `rate_limits` table.
 ## Rollback
 
 If needed:
+
 ```bash
 git checkout workers/src/index.ts
 git checkout workers/src/durable.ts

@@ -20,10 +20,19 @@ export default {
 		if (request.method === 'POST' && url.pathname === '/deploy-webhook') {
 			try {
 				console.log('deploy-webhook')
-				const body = await request.json() as { version: string; update_date: string }
+				const body = await request.json() as { version: string; update_date: string; release_url?: string }
 				const version = body.version
 				const updateDate = body.update_date
-				const message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${new Date().toUTCString()}`
+				const releaseUrl = body.release_url
+				
+				await env.METADATA.put('version', version)
+				await env.METADATA.put('last_deploy_date', updateDate)
+				
+				let message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${new Date().toUTCString()}`
+				if (releaseUrl) {
+					message += `\n\n[View Release](${releaseUrl})`
+				}
+				
 				console.log({ 'env.ADMIN_CHAT_ID': env.ADMIN_CHAT_ID })
 				await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
 

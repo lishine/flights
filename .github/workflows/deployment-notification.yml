@@ -7,6 +7,8 @@ jobs:
     notify:
         runs-on: ubuntu-latest
         if: github.event.deployment_status.state == 'success'
+        permissions:
+            contents: write
 
         steps:
             - name: Checkout code
@@ -14,14 +16,36 @@ jobs:
               with:
                   ref: ${{ github.event.deployment.ref }}
 
+            - name: Calculate version
+              id: version
+              run: |
+                  COMMIT_COUNT=$(git rev-list --count HEAD)
+                  VERSION="1.0.$COMMIT_COUNT"
+                  UPDATE_DATE=$(date +%Y-%m-%d)
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "update_date=$UPDATE_DATE" >> $GITHUB_OUTPUT
+                  echo "Calculated version: $VERSION"
+
+            - name: Create Release
+              id: create_release
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: v${{ steps.version.outputs.version }}
+                  release_name: Release v${{ steps.version.outputs.version }}
+                  body: |
+                      Automated deployment from commit ${{ github.sha }}
+                      Environment: ${{ github.event.deployment.environment }}
+                  draft: false
+                  prerelease: false
+
             - name: Wait for deployment to be ready
-              run: sleep 1
+              run: sleep 10
 
             - name: Call deploy webhook
               run: |
-                  VERSION=$(cat workers/version.json | jq -r '.version')
-                  UPDATE_DATE=$(cat workers/version.json | jq -r '.update_date')
                   curl -X POST "https://flights.vim55k.workers.dev/deploy-webhook" \
                     -H "Content-Type: application/json" \
-                    -d "{\"version\":\"$VERSION\",\"update_date\":\"$UPDATE_DATE\"}" \
+                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.html_url }}\"}" \
                     -w "\nHTTP Status: %{http_code}\n"
