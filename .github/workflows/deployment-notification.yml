@@ -1,19 +1,19 @@
 name: Deployment Notification
 
 on:
-  deployment_status:
+    deployment_status:
 
 jobs:
-  notify:
-    runs-on: ubuntu-latest
-    if: github.event.deployment_status.state == 'success'
-    
-    steps:
-      - name: Wait for deployment to be ready
-        run: sleep 10
-      
-      - name: Call deploy webhook
-        run: |
-          curl -X POST "https://flights.lishine.workers.dev/deploy-webhook" \
-            -H "Content-Type: application/json" \
-            -w "\nHTTP Status: %{http_code}\n"
+    notify:
+        runs-on: ubuntu-latest
+        if: github.event.deployment_status.state == 'success'
+
+        steps:
+            - name: Wait for deployment to be ready
+              run: sleep 10
+
+            - name: Call deploy webhook
+              run: |
+                  curl -X POST "https://flights.vim55k.workers.dev/deploy-webhook" \
+                    -H "Content-Type: application/json" \
+                    -w "\nHTTP Status: %{http_code}\n"
