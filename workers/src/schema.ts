@@ -25,18 +25,14 @@ export const initializeSchema = (ctx: DurableObjectState) => {
 			telegram_id TEXT,
 			flight_id TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			auto_cleanup_at DATETIME NULL,
 			PRIMARY KEY (telegram_id, flight_id),
 			FOREIGN KEY (flight_id) REFERENCES flights(id)
 		)
 	`)
 
 	ctx.storage.sql.exec(`
-		CREATE INDEX IF NOT EXISTS idx_active_subs ON subscriptions(auto_cleanup_at) WHERE auto_cleanup_at IS NULL;
-		CREATE INDEX IF NOT EXISTS idx_cleanup_ready ON subscriptions(auto_cleanup_at) WHERE auto_cleanup_at IS NOT NULL;
 		CREATE INDEX IF NOT EXISTS idx_user_subs ON subscriptions(telegram_id);
 		CREATE INDEX IF NOT EXISTS idx_flight_subs ON subscriptions(flight_id);
-		CREATE INDEX IF NOT EXISTS idx_tracked_flights ON subscriptions(telegram_id, auto_cleanup_at) WHERE auto_cleanup_at IS NULL;
 	`)
 
 	ctx.storage.sql.exec(`

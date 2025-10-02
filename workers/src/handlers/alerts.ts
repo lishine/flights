@@ -1,5 +1,4 @@
 import { sendTelegramMessage } from '../services/telegram'
-import { cleanupStaleTrackingData } from '../services/tracking'
 import type { Env } from '../env'
 import type { Flight } from '../types'
 
@@ -9,7 +8,7 @@ export const sendFlightAlerts = async (
 	ctx: DurableObjectState
 ) => {
 	const subsResult = ctx.storage.sql.exec(
-		'SELECT flight_id, telegram_id FROM subscriptions WHERE auto_cleanup_at IS NULL'
+		'SELECT flight_id, telegram_id FROM subscriptions'
 	)
 	const allSubs = subsResult.toArray() as { flight_id: string; telegram_id: string }[]
 
@@ -29,26 +28,20 @@ export const sendFlightAlerts = async (
 			console.log(`Changes: ${flightChange.changes.join(', ')}`)
 
 			// Send alerts to all subscribers
-			let validAlerts = 0
 			for (const telegram_id of subscribers) {
-				await sendAlert(Number(telegram_id), flightChange.flight, flightChange.changes, env, ctx)
-				validAlerts++
+				await sendAlert(Number(telegram_id), flightChange.flight, flightChange.changes, env)
 			}
 
-			console.log(`Sent alerts to ${validAlerts} users for flight ${flightChange.flight.flight_number}`)
+			console.log(`Sent alerts to ${subscribers.length} users for flight ${flightChange.flight.flight_number}`)
 		}
 	}
 }
 
-const sendAlert = async (userId: number, flight: Flight, changes: string[], env: Env, ctx: DurableObjectState) => {
+const sendAlert = async (userId: number, flight: Flight, changes: string[], env: Env) => {
 	const message = `🚨 *Flight Update: ${flight.flight_number}*\n\n${changes.join('\n')}\n\nCity: ${
 		flight.city || 'Unknown'
 	}\nAirline: ${flight.airline || 'Unknown'}`
 	await sendTelegramMessage(userId, message, env, false)
 
-	const status = flight.status?.toLowerCase() || ''
-	if (status.includes('landed') || status.includes('landing') || status.includes('canceled')) {
-		console.log(`Flight ${flight.flight_number} is ${status}, running cleanup`)
-		cleanupStaleTrackingData(flight.id, env, ctx)
-	}
+	// Cleanup is now handled by cron every 10 minutes
 }

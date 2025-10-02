@@ -20,7 +20,6 @@ export const getSubscribedFlights = (ctx: DurableObjectState) => {
 	const result = ctx.storage.sql.exec(`
 		SELECT f.* FROM flights f
 		INNER JOIN subscriptions s ON f.id = s.flight_id
-		WHERE s.auto_cleanup_at IS NULL
 		ORDER BY f.eta DESC
 	`)
 	const results = result.toArray() as Flight[]
@@ -33,7 +32,7 @@ export const getUserTrackedFlightsWithData = (userId: number, env: Env, ctx: Dur
 		`SELECT f.id, f.flight_number, f.status, f.sta, f.eta, f.city, f.airline, f.created_at, f.updated_at
 		 FROM flights f
 		 INNER JOIN subscriptions s ON f.id = s.flight_id
-		 WHERE s.telegram_id = ? AND s.auto_cleanup_at IS NULL
+		 WHERE s.telegram_id = ?
 		 ORDER BY f.eta ASC`,
 		userId
 	)
@@ -124,22 +123,38 @@ export const getNotTrackedFlights = (chatId: number, ctx: DurableObjectState) =>
 	return result.toArray() as Flight[]
 }
 
-export const cleanupCompletedFlights = (currentFlights: Flight[], env: Env, ctx: DurableObjectState) => {
+/**
+ * Clean up subscriptions for completed flights
+ * Criteria: LANDED, CANCELED, or ETA passed by 1+ hours
+ * 
+ * This runs independently of the API feed, so it works even if 
+ * flights are no longer returned by the API
+ */
+export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState) => {
 	const nowIdt = getCurrentIdtTime()
-	const cutoffIdt = new Date(nowIdt.getTime() - 2 * 60 * 60 * 1000) // 2 hours ago
-	console.log(`Cleanup: cutoff=${cutoffIdt.toLocaleString()}`)
+	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago
+	
+	console.log(`Cleanup: cutoff=${new Date(cutoffTimestamp).toLocaleString()}`)
 
-	for (const flight of currentFlights) {
-		const arrivalIdt = new Date(flight.eta)
-		if (flight.status === 'LANDED' && arrivalIdt < cutoffIdt) {
-			console.log(`Cleaning up landed flight: ${flight.flight_number}, arrived at ${arrivalIdt.toLocaleString()}`)
-			ctx.storage.sql.exec('DELETE FROM flights WHERE id = ?', flight.id)
-			ctx.storage.sql.exec(
-				"UPDATE subscriptions SET auto_cleanup_at = DATETIME(CURRENT_TIMESTAMP, '+2 hours') WHERE flight_id = ? AND auto_cleanup_at IS NULL",
-				flight.id
-			)
-		}
-	}
+	// Delete subscriptions where:
+	// 1. Flight is LANDED or CANCELED, OR
+	// 2. Flight ETA is more than 1 hour ago (regardless of status)
+	// Uses JOIN for better performance and RETURNING to get count in single query
+	const result = ctx.storage.sql.exec(`
+		DELETE FROM subscriptions 
+		WHERE rowid IN (
+			SELECT s.rowid 
+			FROM subscriptions s
+			INNER JOIN flights f ON s.flight_id = f.id
+			WHERE f.status IN ('LANDED', 'CANCELED')
+			   OR f.eta < ?
+		)
+		RETURNING flight_id
+	`, cutoffTimestamp)
+	
+	const count = result.toArray().length
+	console.log(`Cleanup: deleted ${count} subscription(s)`)
+	return count
 }
 
 export const detectChanges = (prevFlight: Flight, currentFlight: Flight) => {

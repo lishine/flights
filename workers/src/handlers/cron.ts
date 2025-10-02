@@ -16,14 +16,24 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 	try {
 		initializeSchema(ctx)
 
-		const previousFlights = getSubscribedFlights(ctx)
-		const previousFlightsMap = Object.fromEntries(previousFlights.map((f) => [f.id, f])) as Record<string, Flight>
-
+		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
-
+		
 		writeStatusData(ctx, currentFlights.length)
 		writeFlightsData(currentFlights, ctx)
 
+		// Single query to get subscribed flights with their previous state
+		const result = ctx.storage.sql.exec(`
+			SELECT f.* FROM flights f
+			INNER JOIN subscriptions s ON f.id = s.flight_id
+			ORDER BY f.eta DESC
+		`)
+		const previousFlights = result.toArray() as Flight[]
+		
+		console.log(`Found ${previousFlights.length} subscribed flights`)
+
+		// Build maps for change detection
+		const previousFlightsMap = Object.fromEntries(previousFlights.map((f) => [f.id, f])) as Record<string, Flight>
 		const currentFlightsMap = Object.fromEntries(currentFlights.map((f) => [f.id, f])) as Record<string, Flight>
 
 		const changesByFlight: Record<string, { flight: Flight; changes: string[] }> = {}
@@ -40,28 +50,28 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 			}
 		}
 
-		// // Check for new flights (not in previous but in current)
-		// for (const flightId in currentFlightsMap) {
-		// 	if (!previousFlightsMap[flightId]) {
-		// 		// New flight - consider all fields as changes
-		// 		const newFlight = currentFlightsMap[flightId]
-		// 		const changes = [
-		// 			`📍 Status: ${newFlight.status}`,
-		// 			newFlight.eta
-		// 				? `🕒 Arrival Time: ${new Date(newFlight.eta).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
-		// 				: '🕒 Arrival Time: TBA',
-		// 			`🏙️ City: ${newFlight.city || 'Unknown'}`,
-		// 			`✈️ Airline: ${newFlight.airline || 'Unknown'}`,
-		// 		]
-		// 		changesByFlight[flightId] = { flight: newFlight, changes }
-		// 	}
-		// }
-
+		// Send alerts if there are changes
 		if (Object.keys(changesByFlight).length > 0) {
 			await sendFlightAlerts(changesByFlight, env, ctx)
 		}
 
-		cleanupCompletedFlights(currentFlights, env, ctx)
+		// Clean up completed flights every 10 minutes
+		const lastCleanupResult = ctx.storage.sql.exec("SELECT value FROM status WHERE key = 'last_cleanup_time'")
+		const lastCleanupRow = lastCleanupResult.toArray()[0] as { value: string } | undefined
+		const lastCleanupTime = lastCleanupRow ? parseInt(lastCleanupRow.value) : 0
+		const now = Date.now()
+		const tenMinutes = 10 * 60 * 1000
+		
+		if (now - lastCleanupTime >= tenMinutes) {
+			console.log('Running cleanup (10 minute interval)')
+			cleanupCompletedFlights(env, ctx)
+			
+			// Update last cleanup time
+			ctx.storage.sql.exec(
+				"INSERT INTO status (key, value) VALUES ('last_cleanup_time', ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",
+				now.toString()
+			)
+		}
 
 		return new Response('Cron job completed')
 	} catch (error) {
