@@ -63,7 +63,7 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 		statusMessage += `\n\n⚠️ Last error: ${escapeMarkdown(errorTime)}`
 	}
 
-	const responseText = statusMessage + `\n\n_Data refreshes every ${CRON_PERIOD_SECONDS} seconds`
+	const responseText = statusMessage + `\n\n_⏱️ Data refreshes every ${CRON_PERIOD_SECONDS} seconds_`
 
 	return responseText
 }

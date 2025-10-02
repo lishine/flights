@@ -137,7 +137,7 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 		message += `${index + 1}. 🛩️ *${escapeMarkdown(flight.flight_number)}*\n`
 		message += `   City: ${escapeMarkdown(flight.city || 'Unknown')}\n`
 		message += `   Airline: ${escapeMarkdown(flight.airline || 'Unknown')}\n`
-		message += `   ⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
+		message += `   ⏱️ Arrival: ${escapeMarkdown(dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime)}\n\n`
 
 		// Add individual track button for each flight
 		inlineKeyboard.push([
