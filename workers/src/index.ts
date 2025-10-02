@@ -69,7 +69,7 @@ export default {
 
 		// Default response with API information
 		const apiInfo = {
-			name: 'fFlights API',
+			name: 'ffFlights API',
 			status: 'running',
 			endpoints: {
 				health: 'GET /health - Service health check',
