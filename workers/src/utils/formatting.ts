@@ -69,11 +69,11 @@ export const formatTrackingListOptimized = (
 			dayLabel = getDayLabelFromTimestamp(flight.eta)
 		}
 
-		message += `🛩️ *${flightNum}*\n`
-		message += `Status: ${flight.status || 'Unknown'}\n`
-		message += `City: ${flight.city || 'Unknown'}\n`
-		message += `Airline: ${flight.airline || 'Unknown'}\n`
-		message += `⏱️ Arrival: ${dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime}\n\n`
+		message += `🛩️ *${escapeMarkdown(flightNum)}*\n`
+		message += `Status: ${escapeMarkdown(flight.status || 'Unknown')}\n`
+		message += `City: ${escapeMarkdown(flight.city || 'Unknown')}\n`
+		message += `Airline: ${escapeMarkdown(flight.airline || 'Unknown')}\n`
+		message += `⏱️ Arrival: ${escapeMarkdown(dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime)}\n\n`
 	}
 
 	// Create untrack buttons - 3 per row

@@ -2,7 +2,7 @@ import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
 import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights } from '../services/flightData'
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
-import { formatTrackingListOptimized, formatFlightSuggestions } from '../utils/formatting'
+import { formatTrackingListOptimized, formatFlightSuggestions, escapeMarkdown } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { CRON_PERIOD_SECONDS, getTelegramUrl } from '../utils/constants'
 import type { Env } from '../env'
@@ -44,23 +44,23 @@ const buildStatusMessage = (ctx: DurableObjectState) => {
 
 		statusMessage +=
 			`✅ System: Online\n\n` +
-			`📅 Last updated: ${lastUpdate} (${timeAgo})\n` +
+			`📅 Last updated: ${escapeMarkdown(lastUpdate)} (${escapeMarkdown(timeAgo)})\n` +
 			`📊 Flights count: ${flightsCount}\n` +
 			`🔢 Total fetches: ${totalFetches}\n\n` +
-			`📦 Version: ${versionData.version}\n` +
-			`📦 Code updated: ${versionData.update_date}\n`
+			`📦 Version: ${escapeMarkdown(versionData.version)}\n` +
+			`📦 Code updated: ${escapeMarkdown(versionData.update_date)}\n`
 	} else {
 		statusMessage +=
 			'🔶 System: Starting up\n\n' +
-			`📦 Version: ${versionData.version}\n` +
-			`📦 Code updated: ${versionData.update_date}\n`
+			`📦 Version: ${escapeMarkdown(versionData.version)}\n` +
+			`📦 Code updated: ${escapeMarkdown(versionData.update_date)}\n`
 	}
 
 	// Add error information if present
 	if (errorData) {
 		const error = JSON.parse(errorData)
 		const errorTime = new Date(error.timestamp).toLocaleString()
-		statusMessage += `\n\n⚠️ Last error: ${errorTime}`
+		statusMessage += `\n\n⚠️ Last error: ${escapeMarkdown(errorTime)}`
 	}
 
 	const responseText = statusMessage + `\n\n_Data refreshes every ${CRON_PERIOD_SECONDS} seconds`
