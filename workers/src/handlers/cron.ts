@@ -9,6 +9,7 @@ import {
 } from '../services/flightData'
 import { initializeSchema } from '../schema'
 import { sendFlightAlerts } from './alerts'
+import { sendTelegramMessage } from '../services/telegram'
 import type { Env } from '../env'
 import type { Flight } from '../types'
 import { getCurrentIdtTime } from '../utils/dateTime'
@@ -20,8 +21,32 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
 
+		// JSON performance testing
+		const jsonStartTime = performance.now()
+		const jsonString = JSON.stringify(currentFlights)
+		const stringifyTime = performance.now() - jsonStartTime
+
+		const parseStartTime = performance.now()
+		const parsedFlights = JSON.parse(jsonString)
+		const parseTime = performance.now() - parseStartTime
+
+		const totalJsonTime = stringifyTime + parseTime
+
+		// Send performance results to Telegram
+		const performanceMessage =
+			`🔧 *JSON Performance Test*\\n\\n` +
+			`Flights count: ${currentFlights.length}\\n` +
+			`JSON size: ${Math.round(jsonString.length / 1024)}KB\\n\\n` +
+			`⚡ Stringify: ${stringifyTime.toFixed(2)}ms\\n` +
+			`⚡ Parse: ${parseTime.toFixed(2)}ms\\n` +
+			`⚡ Total: ${totalJsonTime.toFixed(2)}ms\\n\\n` +
+			`Time: ${new Date().toLocaleTimeString()}`
+
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
+
 		writeStatusData(ctx, currentFlights.length)
-		writeFlightsData(currentFlights, ctx)
+		// TEMPORARILY DISABLED: Stop saving currentflights to SQLite
+		// writeFlightsData(currentFlights, ctx)
 
 		// Single query to get subscribed flights with their previous state
 		const result = ctx.storage.sql.exec(`

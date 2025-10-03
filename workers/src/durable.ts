@@ -20,8 +20,7 @@ export class FlightDO extends DurableObject<Env> {
 				console.log('constructor currentAlarm == null')
 				const oneMinute = CRON_PERIOD_SECONDS * 1000 // 1 minute in milliseconds
 				console.log(`Setting initial alarm for ${oneMinute}ms from now`)
-				// TEMPORARILY DISABLED: Stop worker from setting initial alarm
-				// await ctx.storage.setAlarm(Date.now() + oneMinute)
+				await ctx.storage.setAlarm(Date.now() + oneMinute)
 			}
 		})
 	}
@@ -81,8 +80,7 @@ export class FlightDO extends DurableObject<Env> {
 
 		const period = CRON_PERIOD_SECONDS * 1000
 		console.log(`Setting next alarm for ${period}ms from now`)
-		// TEMPORARILY DISABLED: Stop worker from scheduling next alarm
-		// await this.ctx.storage.setAlarm(Date.now() + period)
+		await this.ctx.storage.setAlarm(Date.now() + period)
 	}
 
 	/**
