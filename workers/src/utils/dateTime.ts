@@ -12,9 +12,17 @@ export const getCurrentIdtTime = () => {
 	return cachedIsraelTime
 }
 
-export const getCurrentIdtTimeString = () => {
+export const getCurrentIdtDateString = () => {
 	const now = new Date()
 	return now.toLocaleString('en-US', {
+		timeZone: 'Asia/Jerusalem',
+		hour12: false,
+	})
+}
+
+export const getCurrentIdtTimeString = () => {
+	const now = new Date()
+	return now.toLocaleTimeString('en-US', {
 		timeZone: 'Asia/Jerusalem',
 		hour12: false,
 	})

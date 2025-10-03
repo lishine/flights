@@ -1,7 +1,7 @@
 import { FlightDO } from './durable'
 import { Env } from './env'
 import { sendTelegramMessage } from './services/telegram'
-import { getCurrentIdtTime } from './utils/dateTime'
+import { getCurrentIdtDateString, getCurrentIdtTime } from './utils/dateTime'
 
 // Export the Durable Object class so the runtime can find it
 export { FlightDO }
@@ -29,7 +29,7 @@ export default {
 				await env.METADATA.put('version', version)
 				await env.METADATA.put('last_deploy_date', updateDate)
 
-				let message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${getCurrentIdtTime().toLocaleString()}`
+				let message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${getCurrentIdtDateString()}`
 				if (releaseUrl) {
 					message += `\n\n[View Release](${releaseUrl})`
 				}
