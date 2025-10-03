@@ -1,4 +1,4 @@
-import { getCurrentIdtTime } from '../utils/dateTime'
+import { getCurrentIdtTime, getIdtTimeString } from '../utils/dateTime'
 import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Env } from '../env'
@@ -176,10 +176,10 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight) => {
 		changes.push(`📍 Status: ${currentFlight.status}`)
 	}
 	if (prevFlight.eta !== currentFlight.eta) {
-		const prevDt = new Date(prevFlight.eta)
-		const currentDt = new Date(currentFlight.eta)
-		const prevTime = prevDt?.toLocaleTimeString() ?? 'TBA'
-		const currentTime = currentDt?.toLocaleTimeString() ?? 'TBA'
+		const prevDt = getIdtTimeString(prevFlight.eta)
+		const currentDt = getIdtTimeString(currentFlight.eta)
+		const prevTime = prevDt ?? 'TBA'
+		const currentTime = currentDt ?? 'TBA'
 		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
 	}
 	if (prevFlight.city !== currentFlight.city) {
