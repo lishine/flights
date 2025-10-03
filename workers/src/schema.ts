@@ -25,8 +25,7 @@ export const initializeSchema = (ctx: DurableObjectState) => {
 			telegram_id TEXT,
 			flight_id TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (telegram_id, flight_id),
-			FOREIGN KEY (flight_id) REFERENCES flights(id)
+			PRIMARY KEY (telegram_id, flight_id)
 		)
 	`)
 
@@ -42,7 +41,6 @@ export const initializeSchema = (ctx: DurableObjectState) => {
 		)
 	`)
 }
-
 export const resetSchema = (ctx: DurableObjectState) => {
 	ctx.storage.sql.exec(`DROP TABLE IF EXISTS subscriptions`)
 	ctx.storage.sql.exec(`DROP TABLE IF EXISTS flights`)

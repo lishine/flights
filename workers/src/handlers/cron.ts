@@ -77,23 +77,23 @@ Time: ${new Date().toLocaleTimeString()}`
 		// 2. Store current flights as JSON (single SQLite write!)
 		storeFlightsInStatus(currentFlights, ctx)
 
-		console.log(`Comparing ${currentFlights.length} current flights with ${previousFlights.length} previous flights`)
+		console.log(
+			`Comparing ${currentFlights.length} current flights with ${previousFlights.length} previous flights`
+		)
 
 		// 3. Get subscribed flight IDs to filter change detection
 		const subscribedResult = ctx.storage.sql.exec('SELECT DISTINCT flight_id FROM subscriptions')
-		const subscribedFlightIds = new Set(subscribedResult.toArray().map(row => (row as { flight_id: string }).flight_id))
+		const subscribedFlightIds = new Set(
+			subscribedResult.toArray().map((row) => (row as { flight_id: string }).flight_id)
+		)
 
 		// 4. Build change maps (only for subscribed flights to reduce noise)
 		const previousFlightsMap = Object.fromEntries(
-			previousFlights
-				.filter(f => subscribedFlightIds.has(f.id))
-				.map(f => [f.id, f])
+			previousFlights.filter((f) => subscribedFlightIds.has(f.id)).map((f) => [f.id, f])
 		) as Record<string, Flight>
 
 		const currentFlightsMap = Object.fromEntries(
-			currentFlights
-				.filter(f => subscribedFlightIds.has(f.id))
-				.map(f => [f.id, f])
+			currentFlights.filter((f) => subscribedFlightIds.has(f.id)).map((f) => [f.id, f])
 		) as Record<string, Flight>
 
 		// 5. Detect changes (same logic as before)
