@@ -1,6 +1,7 @@
 import { FlightDO } from './durable'
 import { Env } from './env'
 import { sendTelegramMessage } from './services/telegram'
+import { getCurrentIdtTime } from './utils/dateTime'
 
 // Export the Durable Object class so the runtime can find it
 export { FlightDO }
@@ -28,7 +29,7 @@ export default {
 				await env.METADATA.put('version', version)
 				await env.METADATA.put('last_deploy_date', updateDate)
 
-				let message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${new Date().toUTCString()}`
+				let message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${getCurrentIdtTime()}`
 				if (releaseUrl) {
 					message += `\n\n[View Release](${releaseUrl})`
 				}
@@ -57,7 +58,7 @@ export default {
 		if (request.method === 'GET' && url.pathname === '/health') {
 			const health = {
 				status: 'healthy',
-				timestamp: new Date().toISOString(),
+				timestamp: getCurrentIdtTime().toISOString(),
 				version: (await env.METADATA.get('version')) || 'unknown',
 				last_deploy: (await env.METADATA.get('last_deploy_date')) || 'unknown',
 			}

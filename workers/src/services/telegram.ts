@@ -1,6 +1,7 @@
 import type { Env } from '../env'
 import { $fetch } from 'ofetch'
 import { getTelegramUrl } from '../utils/constants'
+import { getCurrentIdtTime } from '../utils/dateTime'
 
 export const sendTelegramMessage = async (
 	chatId: number,
@@ -35,9 +36,11 @@ export const sendTelegramMessage = async (
 				chatId,
 				textLength: text.length,
 				hasReplyMarkup: !!replyMarkup,
-				textPreview: text.length > 100 ? text.substring(0, 100) + '...' : text
+				textPreview: text.length > 100 ? text.substring(0, 100) + '...' : text,
 			})
-			throw new Error(`Telegram API error: ${result.description || 'Unknown error'} (code: ${result.error_code || 'N/A'})`)
+			throw new Error(
+				`Telegram API error: ${result.description || 'Unknown error'} (code: ${result.error_code || 'N/A'})`
+			)
 		}
 	} catch (error) {
 		// Enhanced error logging with more details
@@ -49,7 +52,7 @@ export const sendTelegramMessage = async (
 				textLength: text.length,
 				hasReplyMarkup: !!replyMarkup,
 				textPreview: text.length > 100 ? text.substring(0, 100) + '...' : text,
-				timestamp: new Date().toISOString()
+				timestamp: getCurrentIdtTime().toISOString(),
 			}
 
 			// Try to extract status code from fetch errors
@@ -68,10 +71,10 @@ export const sendTelegramMessage = async (
 				error,
 				chatId,
 				textLength: text.length,
-				timestamp: new Date().toISOString()
+				timestamp: getCurrentIdtTime().toISOString(),
 			})
 		}
-		
+
 		// Don't throw the error - let other commands continue to work
 		// This prevents the entire command handler from failing
 	}

@@ -25,3 +25,7 @@ The project uses automatic version management via GitHub Actions:
 - **METADATA** namespace stores deployment metadata:
     - `version` - Current deployed version
     - `last_deploy_date` - Date of last deployment
+
+# Dates
+
+for this project for current time use - getCurrentIdtTime. not Date()
