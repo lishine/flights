@@ -46,6 +46,10 @@ export class FlightDO extends DurableObject<Env> {
 
 			case '/reset':
 				this.setAlarmCount(0)
+				// Force restart the alarm process
+				const oneMinute = CRON_PERIOD_SECONDS * 1000
+				await this.ctx.storage.setAlarm(Date.now() + oneMinute)
+				console.log('Manual alarm restart triggered')
 				return new Response('Alarm count reset and new alarm set', {
 					headers: { 'Content-Type': 'text/plain' },
 				})
