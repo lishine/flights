@@ -25,6 +25,8 @@ export const getCurrentIdtTimeString = () => {
 	return now.toLocaleTimeString('en-US', {
 		timeZone: 'Asia/Jerusalem',
 		hour12: false,
+		hour: '2-digit',
+		minute: '2-digit',
 	})
 }
 
