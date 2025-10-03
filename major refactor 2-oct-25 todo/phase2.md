@@ -192,57 +192,8 @@ export class AdminRequiredError extends Error {
 **File**: `workers/src/schema.ts`
 
 Add rate limiting table:
-
-```typescript
-export const initializeSchema = (ctx: DurableObjectState) => {
-	// Existing flights table
-	ctx.storage.sql.exec(`
-		CREATE TABLE IF NOT EXISTS flights (
-			id TEXT PRIMARY KEY NOT NULL,
-			flight_number TEXT NOT NULL,
-			status TEXT NOT NULL,
-			sta INTEGER,
-			eta INTEGER,
-			city TEXT,
-			airline TEXT,
-			created_at INTEGER DEFAULT (strftime('%s', 'now')),
-			updated_at INTEGER DEFAULT (strftime('%s', 'now')),
-			UNIQUE(flight_number, sta)
-		)
-	`)
-
-	ctx.storage.sql.exec(`
-		CREATE INDEX IF NOT EXISTS idx_flight_number ON flights (flight_number);
-		CREATE INDEX IF NOT EXISTS idx_status ON flights (status);
-		CREATE INDEX IF NOT EXISTS idx_scheduled_arrival ON flights (sta);
-	`)
-
-	// Existing subscriptions table
-	ctx.storage.sql.exec(`
-		CREATE TABLE IF NOT EXISTS subscriptions (
-			telegram_id TEXT,
-			flight_id TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (telegram_id, flight_id),
-			FOREIGN KEY (flight_id) REFERENCES flights(id)
-		)
-	`)
-
-	ctx.storage.sql.exec(`
-		CREATE INDEX IF NOT EXISTS idx_user_subs ON subscriptions(telegram_id);
-		CREATE INDEX IF NOT EXISTS idx_flight_subs ON subscriptions(flight_id);
-	`)
-
-	// Existing status table
-	ctx.storage.sql.exec(`
-		CREATE TABLE IF NOT EXISTS status (
-			key TEXT PRIMARY KEY NOT NULL,
-			value TEXT
-		)
-	`)
-
-	// NEW: Rate limiting table
-	ctx.storage.sql.exec(`
+// NEW: Rate limiting table
+ctx.storage.sql.exec(`
 		CREATE TABLE IF NOT EXISTS rate_limits (
 			key TEXT PRIMARY KEY NOT NULL,
 			count INTEGER NOT NULL DEFAULT 0,
@@ -250,21 +201,15 @@ export const initializeSchema = (ctx: DurableObjectState) => {
 		)
 	`)
 
-	ctx.storage.sql.exec(`
-		CREATE INDEX IF NOT EXISTS idx_rate_limit_reset ON rate_limits(reset_at);
-	`)
+    ctx.storage.sql.exec(`
+    	CREATE INDEX IF NOT EXISTS idx_rate_limit_reset ON rate_limits(reset_at);
+    `)
+
 }
 
-export const resetSchema = (ctx: DurableObjectState) => {
-	ctx.storage.sql.exec(`DROP TABLE IF EXISTS subscriptions`)
-	ctx.storage.sql.exec(`DROP TABLE IF EXISTS flights`)
-	ctx.storage.sql.exec(`DROP TABLE IF EXISTS status`)
-	ctx.storage.sql.exec(`DROP TABLE IF EXISTS rate_limits`)
+update resetSchema
 
-	// Then reinitialize with the new schema
-	initializeSchema(ctx)
-}
-```
+``
 
 ---
 
@@ -478,30 +423,3 @@ ls workers/src/middleware/admin.ts
 ### ✅ Schema Updated
 
 Check `workers/src/schema.ts` includes `rate_limits` table.
-
----
-
-## Testing
-
-**Note**: Full testing happens in Phase 5. For now, just verify compilation.
-
----
-
-## Rollback
-
-If needed:
-
-```bash
-git checkout workers/src/index.ts
-git checkout workers/src/durable.ts
-git checkout workers/src/schema.ts
-rm workers/src/utils/security.ts
-rm workers/src/middleware/rateLimit.ts
-rm workers/src/middleware/admin.ts
-```
-
----
-
-## Next Phase
-
-Once all acceptance criteria pass, proceed to **Phase 3: Grammy Integration**.

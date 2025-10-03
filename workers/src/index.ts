@@ -54,6 +54,10 @@ export default {
 			return stub.fetch(request)
 		}
 
+		if (request.method === 'GET' && url.pathname === '/lifetime') {
+			return stub.fetch(request)
+		}
+
 		// Health check endpoint
 		if (request.method === 'GET' && url.pathname === '/health') {
 			const health = {

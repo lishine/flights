@@ -7,6 +7,8 @@ import { CRON_PERIOD_SECONDS } from './utils/constants'
 
 export class FlightDO extends DurableObject<Env> {
 	private alarmCount: number = 0
+	private instanceStartTime: number = Date.now() // Add this
+	private requestCount: number = 0 // Add this
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		console.log('constructor')
@@ -27,6 +29,23 @@ export class FlightDO extends DurableObject<Env> {
 
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url)
+
+		this.requestCount++ // Increment on every request
+
+		if (url.pathname === '/lifetime') {
+			const uptime = Date.now() - this.instanceStartTime
+			const uptimeMinutes = Math.floor(uptime / 60000)
+			const uptimeSeconds = Math.floor((uptime % 60000) / 1000)
+
+			return new Response(
+				`DO Instance Lifetime Stats:\n` +
+					`Started: ${new Date(this.instanceStartTime).toISOString()}\n` +
+					`Uptime: ${uptimeMinutes}m ${uptimeSeconds}s\n` +
+					`Total Requests: ${this.requestCount}\n` +
+					`Current Time: ${new Date().toISOString()}`,
+				{ headers: { 'Content-Type': 'text/plain' } }
+			)
+		}
 
 		if (request.method === 'POST' && url.pathname === '/webhook') {
 			return handleCommand(request, this.env, this.ctx)
