@@ -22,23 +22,23 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		const currentFlights = await fetchLatestFlights(env, ctx)
 
 		// JSON performance testing
-		const jsonStartTime = performance.now()
-		const jsonString = JSON.stringify(currentFlights)
-		const stringifyTime = performance.now() - jsonStartTime
+		const jsonStringifyStart = performance.now()
+		const jsonStringified = JSON.stringify(currentFlights)
+		const jsonStringifyTime = performance.now() - jsonStringifyStart
 
-		const parseStartTime = performance.now()
-		const parsedFlights = JSON.parse(jsonString)
-		const parseTime = performance.now() - parseStartTime
+		const jsonParseStart = performance.now()
+		const jsonParsed = JSON.parse(jsonStringified)
+		const jsonParseTime = performance.now() - jsonParseStart
 
-		const totalJsonTime = stringifyTime + parseTime
+		const totalJsonTime = jsonStringifyTime + jsonParseTime
 
 		// Send performance results to Telegram
 		const performanceMessage =
 			`🔧 *JSON Performance Test*\\n\\n` +
 			`Flights count: ${currentFlights.length}\\n` +
-			`JSON size: ${Math.round(jsonString.length / 1024)}KB\\n\\n` +
-			`⚡ Stringify: ${stringifyTime.toFixed(2)}ms\\n` +
-			`⚡ Parse: ${parseTime.toFixed(2)}ms\\n` +
+			`JSON size: ${Math.round(jsonStringified.length / 1024)}KB\\n\\n` +
+			`⚡ Stringify: ${jsonStringifyTime.toFixed(2)}ms\\n` +
+			`⚡ Parse: ${jsonParseTime.toFixed(2)}ms\\n` +
 			`⚡ Total: ${totalJsonTime.toFixed(2)}ms\\n\\n` +
 			`Time: ${new Date().toLocaleTimeString()}`
 
