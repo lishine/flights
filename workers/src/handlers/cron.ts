@@ -27,46 +27,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		let totalParseTime = 0
 		let jsonStringified = ''
 
-		// Test performance.now() precision
-		const precisionTest1 = performance.now()
-		const precisionTest2 = performance.now()
-		const precisionDiff = precisionTest2 - precisionTest1
-
-		// Run 10000 iterations of stringify
-		const stringifyStart = performance.now()
-		for (let i = 0; i < iterations; i++) {
-			jsonStringified = JSON.stringify(currentFlights)
-		}
-		const stringifyEnd = performance.now()
-		totalStringifyTime = stringifyEnd - stringifyStart
-
-		// Run 10000 iterations of parse
-		const parseStart = performance.now()
-		for (let i = 0; i < iterations; i++) {
-			JSON.parse(jsonStringified)
-		}
-		const parseEnd = performance.now()
-		totalParseTime = parseEnd - parseStart
-
-		const avgStringifyTime = totalStringifyTime / iterations
-		const avgParseTime = totalParseTime / iterations
-		const avgTotalTime = avgStringifyTime + avgParseTime
-
-		// Send performance results to Telegram
-		const performanceMessage = `🔧 *JSON Performance Test* (10k avg)
-
-Flights count: ${currentFlights.length}
-JSON size: ${Math.round(jsonStringified.length / 1024)}KB
-
-⚡ Stringify: ${avgStringifyTime.toFixed(4)}ms avg
-⚡ Parse: ${avgParseTime.toFixed(4)}ms avg
-⚡ Total: ${avgTotalTime.toFixed(4)}ms avg
-
-📊 10k totals: ${totalStringifyTime.toFixed(2)}ms + ${totalParseTime.toFixed(2)}ms
-🔍 Timer precision: ${precisionDiff.toFixed(6)}ms
-Time: ${new Date().toLocaleTimeString()}`
-
-		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
+		// await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
 
 		writeStatusData(ctx, currentFlights.length)
 

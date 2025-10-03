@@ -4,67 +4,68 @@ import { ofetch } from 'ofetch'
 import type { Env } from '../env'
 import type { Flight, VercelApiResponse, VercelFlightResponse } from '../types'
 
-export const getCurrentFlights = (ctx: DurableObjectState) => {
-	const result = ctx.storage.sql.exec('SELECT * FROM flights ORDER BY eta DESC')
-	const results = result.toArray() as Flight[]
+// Legacy functions - replaced by JSON-based versions
+// export const getCurrentFlights = (ctx: DurableObjectState) => {
+// 	const result = ctx.storage.sql.exec('SELECT * FROM flights ORDER BY eta DESC')
+// 	const results = result.toArray() as Flight[]
+//
+// 	if (!results || results.length === 0) {
+// 		console.error('No flight data available in SQLite')
+// 		throw new Error('Flight data unavailable')
+// 	}
+// 	console.log('Using Durable Object SQLite flight data')
+// 	return results
+// }
 
-	if (!results || results.length === 0) {
-		console.error('No flight data available in SQLite')
-		throw new Error('Flight data unavailable')
-	}
-	console.log('Using Durable Object SQLite flight data')
-	return results
-}
+// export const getSubscribedFlights = (ctx: DurableObjectState) => {
+// 	const result = ctx.storage.sql.exec(`
+// 		SELECT f.* FROM flights f
+// 		INNER JOIN subscriptions s ON f.id = s.flight_id
+// 		ORDER BY f.eta DESC
+// 	`)
+// 	const results = result.toArray() as Flight[]
+// 	console.log(`Found ${results.length} subscribed flights`)
+// 	return results
+// }
 
-export const getSubscribedFlights = (ctx: DurableObjectState) => {
-	const result = ctx.storage.sql.exec(`
-		SELECT f.* FROM flights f
-		INNER JOIN subscriptions s ON f.id = s.flight_id
-		ORDER BY f.eta DESC
-	`)
-	const results = result.toArray() as Flight[]
-	console.log(`Found ${results.length} subscribed flights`)
-	return results
-}
+// export const getUserTrackedFlightsWithData = (userId: number, env: Env, ctx: DurableObjectState) => {
+// 	const result = ctx.storage.sql.exec(
+// 		`SELECT f.id, f.flight_number, f.status, f.sta, f.eta, f.city, f.airline, f.created_at, f.updated_at
+// 		 FROM flights f
+// 		 INNER JOIN subscriptions s ON f.id = s.flight_id
+// 		 WHERE s.telegram_id = ?
+// 		 ORDER BY f.eta ASC`,
+// 		userId
+// 	)
+// 	return result.toArray() as Flight[]
+// }
 
-export const getUserTrackedFlightsWithData = (userId: number, env: Env, ctx: DurableObjectState) => {
-	const result = ctx.storage.sql.exec(
-		`SELECT f.id, f.flight_number, f.status, f.sta, f.eta, f.city, f.airline, f.created_at, f.updated_at
-		 FROM flights f
-		 INNER JOIN subscriptions s ON f.id = s.flight_id
-		 WHERE s.telegram_id = ?
-		 ORDER BY f.eta ASC`,
-		userId
-	)
-	return result.toArray() as Flight[]
-}
+// export const getCurrentFlightData = (flightNumber: string, ctx: DurableObjectState) => {
+// 	const result = ctx.storage.sql.exec('SELECT * FROM flights WHERE flight_number = ? ORDER BY eta ASC', flightNumber)
+// 	const results = result.toArray() as Flight[]
+// 	return results?.[0]
+// }
 
-export const getCurrentFlightData = (flightNumber: string, ctx: DurableObjectState) => {
-	const result = ctx.storage.sql.exec('SELECT * FROM flights WHERE flight_number = ? ORDER BY eta ASC', flightNumber)
-	const results = result.toArray() as Flight[]
-	return results?.[0]
-}
+// export const getNextFutureFlight = (flightNumber: string, ctx: DurableObjectState) => {
+// 	const nowIdt = getCurrentIdtTime()
+// 	const result = ctx.storage.sql.exec(
+// 		'SELECT * FROM flights WHERE flight_number = ? AND eta > ? ORDER BY eta ASC',
+// 		flightNumber,
+// 		nowIdt.getTime()
+// 	)
+// 	const results = result.toArray() as Flight[]
+// 	return results?.[0]
+// }
 
-export const getNextFutureFlight = (flightNumber: string, ctx: DurableObjectState) => {
-	const nowIdt = getCurrentIdtTime()
-	const result = ctx.storage.sql.exec(
-		'SELECT * FROM flights WHERE flight_number = ? AND eta > ? ORDER BY eta ASC',
-		flightNumber,
-		nowIdt.getTime()
-	)
-	const results = result.toArray() as Flight[]
-	return results?.[0]
-}
-
-export const getFlightIdByNumber = (flightNumber: string, ctx: DurableObjectState) => {
-	const futureFlight = getNextFutureFlight(flightNumber, ctx)
-	if (futureFlight) {
-		return futureFlight.id
-	}
-
-	const flight = getCurrentFlightData(flightNumber, ctx)
-	return flight?.id
-}
+// export const getFlightIdByNumber = (flightNumber: string, ctx: DurableObjectState) => {
+// 	const futureFlight = getNextFutureFlight(flightNumber, ctx)
+// 	if (futureFlight) {
+// 		return futureFlight.id
+// 	}
+//
+// 	const flight = getCurrentFlightData(flightNumber, ctx)
+// 	return flight?.id
+// }
 
 export const generateFakeFlights = (): Flight[] => {
 	const now = getCurrentIdtTime()
@@ -109,56 +110,20 @@ export const generateFakeFlights = (): Flight[] => {
 	]
 }
 
-export const getNotTrackedFlights = (chatId: number, ctx: DurableObjectState) => {
-	const result = ctx.storage.sql.exec(
-		`
-		SELECT f.* FROM flights f
-		LEFT JOIN subscriptions s ON f.id = s.flight_id AND s.telegram_id = ?
-		WHERE s.flight_id IS NULL
-		ORDER BY f.eta ASC
-		`,
-		chatId
-	)
-
-	return result.toArray() as Flight[]
-}
-
-/**
- * Clean up subscriptions for completed flights
- * Criteria: LANDED, CANCELED, or ETA passed by 1+ hours
- *
- * This runs independently of the API feed, so it works even if
- * flights are no longer returned by the API
- */
-export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState) => {
-	const nowIdt = getCurrentIdtTime()
-	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago
-
-	console.log(`Cleanup: cutoff=${new Date(cutoffTimestamp).toLocaleString()}`)
-
-	// Delete subscriptions where:
-	// 1. Flight is LANDED or CANCELED, OR
-	// 2. Flight ETA is more than 1 hour ago (regardless of status)
-	// Uses JOIN for better performance and RETURNING to get count in single query
-	const result = ctx.storage.sql.exec(
-		`
-		DELETE FROM subscriptions 
-		WHERE rowid IN (
-			SELECT s.rowid 
-			FROM subscriptions s
-			INNER JOIN flights f ON s.flight_id = f.id
-			WHERE f.status IN ('LANDED', 'CANCELED')
-			   OR f.eta < ?
-		)
-		RETURNING flight_id
-	`,
-		cutoffTimestamp
-	)
-
-	const count = result.toArray().length
-	console.log(`Cleanup: deleted ${count} subscription(s)`)
-	return count
-}
+// Legacy function - replaced by getNotTrackedFlightsFromStatus
+// export const getNotTrackedFlights = (chatId: number, ctx: DurableObjectState) => {
+// 	const result = ctx.storage.sql.exec(
+// 		`
+// 		SELECT f.* FROM flights f
+// 		LEFT JOIN subscriptions s ON f.id = s.flight_id AND s.telegram_id = ?
+// 		WHERE s.flight_id IS NULL
+// 		ORDER BY f.eta ASC
+// 		`,
+// 		chatId
+// 	)
+//
+// 	return result.toArray() as Flight[]
+// }
 
 /**
  * Clean up subscriptions for completed flights (JSON version)
@@ -172,15 +137,13 @@ export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectSt
 
 	try {
 		const currentFlights = getCurrentFlightsFromStatus(ctx)
-		
+
 		// Get completed flight IDs (LANDED, CANCELED, or ETA passed by 1+ hours)
 		const completedFlightIds = currentFlights
-			.filter(flight => 
-				flight.status === 'LANDED' || 
-				flight.status === 'CANCELED' || 
-				flight.eta < cutoffTimestamp
+			.filter(
+				(flight) => flight.status === 'LANDED' || flight.status === 'CANCELED' || flight.eta < cutoffTimestamp
 			)
-			.map(flight => flight.id)
+			.map((flight) => flight.id)
 
 		if (completedFlightIds.length === 0) {
 			console.log('Cleanup: no completed flights found')
@@ -197,9 +160,10 @@ export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectSt
 			totalDeleted += result.toArray().length
 		}
 
-		console.log(`Cleanup: deleted ${totalDeleted} subscription(s) for ${completedFlightIds.length} completed flights`)
+		console.log(
+			`Cleanup: deleted ${totalDeleted} subscription(s) for ${completedFlightIds.length} completed flights`
+		)
 		return totalDeleted
-
 	} catch (error) {
 		console.error('Cleanup failed, no current flights available:', error)
 		return 0
@@ -324,24 +288,26 @@ export const writeFlightsData = (flights: Flight[], ctx: DurableObjectState) => 
 // NEW JSON-BASED FLIGHT DATA FUNCTIONS
 // ==========================================
 
-/**
- * Get current flights from JSON stored in status table
- */
+let flights: Flight[]
 export const getCurrentFlightsFromStatus = (ctx: DurableObjectState): Flight[] => {
+	if (flights) {
+		return flights
+	}
 	const result = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'flights_data')
 	const row = result.toArray()[0] as { value: string } | undefined
-	
+
 	if (!row?.value) {
 		console.log('No previous flight data found in status table')
-		return []
+		flights = []
+	} else {
+		try {
+			flights = JSON.parse(row.value) as Flight[]
+		} catch (error) {
+			console.error('Failed to parse flights JSON:', error)
+			flights = []
+		}
 	}
-	
-	try {
-		return JSON.parse(row.value) as Flight[]
-	} catch (error) {
-		console.error('Failed to parse flights JSON:', error)
-		return []
-	}
+	return flights
 }
 
 /**
@@ -361,15 +327,13 @@ export const storeFlightsInStatus = (flights: Flight[], ctx: DurableObjectState)
  */
 export const getUserTrackedFlightsFromStatus = (userId: number, ctx: DurableObjectState): Flight[] => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
-	
+
 	// Get user's subscribed flight IDs from SQLite
 	const result = ctx.storage.sql.exec('SELECT flight_id FROM subscriptions WHERE telegram_id = ?', userId)
-	const subscribedIds = result.toArray().map(row => (row as { flight_id: string }).flight_id)
-	
+	const subscribedIds = result.toArray().map((row) => (row as { flight_id: string }).flight_id)
+
 	// Filter and sort flights
-	return allFlights
-		.filter(flight => subscribedIds.includes(flight.id))
-		.sort((a, b) => a.eta - b.eta)
+	return allFlights.filter((flight) => subscribedIds.includes(flight.id)).sort((a, b) => a.eta - b.eta)
 }
 
 /**
@@ -377,7 +341,7 @@ export const getUserTrackedFlightsFromStatus = (userId: number, ctx: DurableObje
  */
 export const getFlightByIdFromStatus = (flightId: string, ctx: DurableObjectState): Flight | undefined => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
-	return allFlights.find(flight => flight.id === flightId)
+	return allFlights.find((flight) => flight.id === flightId)
 }
 
 /**
@@ -385,7 +349,7 @@ export const getFlightByIdFromStatus = (flightId: string, ctx: DurableObjectStat
  */
 export const getFlightByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState): Flight | undefined => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
-	return allFlights.find(flight => flight.flight_number === flightNumber)
+	return allFlights.find((flight) => flight.flight_number === flightNumber)
 }
 
 /**
@@ -393,15 +357,13 @@ export const getFlightByNumberFromStatus = (flightNumber: string, ctx: DurableOb
  */
 export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjectState): Flight[] => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
-	
+
 	// Get user's subscribed flight IDs
 	const result = ctx.storage.sql.exec('SELECT flight_id FROM subscriptions WHERE telegram_id = ?', chatId)
-	const subscribedIds = result.toArray().map(row => (row as { flight_id: string }).flight_id)
-	
+	const subscribedIds = result.toArray().map((row) => (row as { flight_id: string }).flight_id)
+
 	// Filter out tracked flights and sort
-	return allFlights
-		.filter(flight => !subscribedIds.includes(flight.id))
-		.sort((a, b) => a.eta - b.eta)
+	return allFlights.filter((flight) => !subscribedIds.includes(flight.id)).sort((a, b) => a.eta - b.eta)
 }
 
 /**
@@ -410,17 +372,17 @@ export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjec
 export const getFlightIdByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState): string | undefined => {
 	const nowIdt = getCurrentIdtTime()
 	const allFlights = getCurrentFlightsFromStatus(ctx)
-	
+
 	// First try to find future flights
 	const futureFlights = allFlights
-		.filter(flight => flight.flight_number === flightNumber && flight.eta > nowIdt.getTime())
+		.filter((flight) => flight.flight_number === flightNumber && flight.eta > nowIdt.getTime())
 		.sort((a, b) => a.eta - b.eta)
-	
+
 	if (futureFlights.length > 0) {
 		return futureFlights[0].id
 	}
-	
+
 	// Fallback to any flight with that number
-	const flight = allFlights.find(flight => flight.flight_number === flightNumber)
+	const flight = allFlights.find((flight) => flight.flight_number === flightNumber)
 	return flight?.id
 }
