@@ -35,7 +35,12 @@ export class FlightDO extends DurableObject<Env> {
 		switch (url.pathname) {
 			case '/reset-schema':
 				resetSchema(this.ctx)
-				return new Response('Schema reset successfully', {
+				// Also restart alarms after schema reset
+				this.setAlarmCount(0)
+				const oneMinute = CRON_PERIOD_SECONDS * 1000
+				await this.ctx.storage.setAlarm(Date.now() + oneMinute)
+				console.log('Schema reset and alarm restart triggered')
+				return new Response('Schema reset successfully and alarms restarted', {
 					headers: { 'Content-Type': 'text/plain' },
 				})
 			case '/status':
@@ -47,8 +52,8 @@ export class FlightDO extends DurableObject<Env> {
 			case '/reset':
 				this.setAlarmCount(0)
 				// Force restart the alarm process
-				const oneMinute = CRON_PERIOD_SECONDS * 1000
-				await this.ctx.storage.setAlarm(Date.now() + oneMinute)
+				const resetPeriod = CRON_PERIOD_SECONDS * 1000
+				await this.ctx.storage.setAlarm(Date.now() + resetPeriod)
 				console.log('Manual alarm restart triggered')
 				return new Response('Alarm count reset and new alarm set', {
 					headers: { 'Content-Type': 'text/plain' },
