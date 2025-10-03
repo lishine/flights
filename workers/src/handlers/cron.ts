@@ -1,11 +1,11 @@
 import {
 	fetchLatestFlights,
-	cleanupCompletedFlights,
-	getSubscribedFlights,
+	cleanupCompletedFlightsFromStatus,
+	getCurrentFlightsFromStatus,
+	storeFlightsInStatus,
 	detectChanges,
 	writeStatusData,
 	writeErrorStatus,
-	writeFlightsData,
 } from '../services/flightData'
 import { initializeSchema } from '../schema'
 import { sendFlightAlerts } from './alerts'
@@ -69,23 +69,34 @@ Time: ${new Date().toLocaleTimeString()}`
 		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
 
 		writeStatusData(ctx, currentFlights.length)
-		// TEMPORARILY DISABLED: Stop saving currentflights to SQLite
-		// writeFlightsData(currentFlights, ctx)
 
-		// Single query to get subscribed flights with their previous state
-		const result = ctx.storage.sql.exec(`
-			SELECT f.* FROM flights f
-			INNER JOIN subscriptions s ON f.id = s.flight_id
-			ORDER BY f.eta DESC
-		`)
-		const previousFlights = result.toArray() as Flight[]
+		// NEW JSON APPROACH: Get previous flights from JSON, store current flights as JSON
+		// 1. Get previous flights from JSON (these become "previous" for change detection)
+		const previousFlights = getCurrentFlightsFromStatus(ctx)
 
-		console.log(`Found ${previousFlights.length} subscribed flights`)
+		// 2. Store current flights as JSON (single SQLite write!)
+		storeFlightsInStatus(currentFlights, ctx)
 
-		// Build maps for change detection
-		const previousFlightsMap = Object.fromEntries(previousFlights.map((f) => [f.id, f])) as Record<string, Flight>
-		const currentFlightsMap = Object.fromEntries(currentFlights.map((f) => [f.id, f])) as Record<string, Flight>
+		console.log(`Comparing ${currentFlights.length} current flights with ${previousFlights.length} previous flights`)
 
+		// 3. Get subscribed flight IDs to filter change detection
+		const subscribedResult = ctx.storage.sql.exec('SELECT DISTINCT flight_id FROM subscriptions')
+		const subscribedFlightIds = new Set(subscribedResult.toArray().map(row => (row as { flight_id: string }).flight_id))
+
+		// 4. Build change maps (only for subscribed flights to reduce noise)
+		const previousFlightsMap = Object.fromEntries(
+			previousFlights
+				.filter(f => subscribedFlightIds.has(f.id))
+				.map(f => [f.id, f])
+		) as Record<string, Flight>
+
+		const currentFlightsMap = Object.fromEntries(
+			currentFlights
+				.filter(f => subscribedFlightIds.has(f.id))
+				.map(f => [f.id, f])
+		) as Record<string, Flight>
+
+		// 5. Detect changes (same logic as before)
 		const changesByFlight: Record<string, { flight: Flight; changes: string[] }> = {}
 
 		for (const flightId in previousFlightsMap) {
@@ -114,7 +125,7 @@ Time: ${new Date().toLocaleTimeString()}`
 
 		if (now - lastCleanupTime >= tenMinutes) {
 			console.log('Running cleanup (10 minute interval)')
-			cleanupCompletedFlights(env, ctx)
+			cleanupCompletedFlightsFromStatus(env, ctx)
 
 			// Update last cleanup time
 			ctx.storage.sql.exec(

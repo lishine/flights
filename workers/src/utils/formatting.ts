@@ -1,4 +1,4 @@
-import { getUserTrackedFlightsWithData } from '../services/flightData'
+import { getUserTrackedFlightsFromStatus } from '../services/flightData'
 import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../env'
 import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup } from '../types'
@@ -49,7 +49,7 @@ export const formatTrackingListOptimized = (
 	env: Env,
 	ctx: DurableObjectState
 ): { text: string; replyMarkup: InlineKeyboardMarkup | null } => {
-	const flights = getUserTrackedFlightsWithData(chatId, env, ctx)
+	const flights = getUserTrackedFlightsFromStatus(chatId, ctx)
 
 	if (flights.length === 0)
 		return {
