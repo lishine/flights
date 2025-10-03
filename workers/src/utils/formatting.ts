@@ -70,9 +70,9 @@ export const formatTrackingListOptimized = (
 		}
 
 		message += `🛩️ *${escapeMarkdown(flightNum)}*\n`
-		message += `Status: ${escapeMarkdown(flight.status || 'Unknown')}\n`
 		message += `City: ${escapeMarkdown(flight.city || 'Unknown')}\n`
 		message += `Airline: ${escapeMarkdown(flight.airline || 'Unknown')}\n`
+		message += `Status: ${escapeMarkdown(flight.status || 'Unknown')}\n`
 		message += `⏱️ Arrival: ${escapeMarkdown(dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime)}\n\n`
 	}
 

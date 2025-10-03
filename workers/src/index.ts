@@ -29,7 +29,7 @@ export default {
 				await env.METADATA.put('version', version)
 				await env.METADATA.put('last_deploy_date', updateDate)
 
-				let message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${getCurrentIdtTime()}`
+				let message = `✅ *Deployment Successful*\n\nVersion: \`${version}\`\nDate: ${updateDate}\nTime: ${getCurrentIdtTime().toLocaleString()}`
 				if (releaseUrl) {
 					message += `\n\n[View Release](${releaseUrl})`
 				}
