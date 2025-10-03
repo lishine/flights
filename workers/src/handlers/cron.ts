@@ -22,7 +22,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		const currentFlights = await fetchLatestFlights(env, ctx)
 
 		// JSON performance testing - 10000 iterations for measurable results
-		const iterations = 10000
+		const iterations = 100
 		let totalStringifyTime = 0
 		let totalParseTime = 0
 		let jsonStringified = ''
