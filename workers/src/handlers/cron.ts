@@ -21,26 +21,42 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
 
-		// JSON performance testing
-		const jsonStringifyStart = performance.now()
-		const jsonStringified = JSON.stringify(currentFlights)
-		const jsonStringifyTime = performance.now() - jsonStringifyStart
+		// JSON performance testing - 100 iterations for accurate measurement
+		const iterations = 100
+		let totalStringifyTime = 0
+		let totalParseTime = 0
+		let jsonStringified = ''
 
-		const jsonParseStart = performance.now()
-		const jsonParsed = JSON.parse(jsonStringified)
-		const jsonParseTime = performance.now() - jsonParseStart
+		// Run 100 iterations of stringify
+		const stringifyStart = performance.now()
+		for (let i = 0; i < iterations; i++) {
+			jsonStringified = JSON.stringify(currentFlights)
+		}
+		totalStringifyTime = performance.now() - stringifyStart
 
-		const totalJsonTime = jsonStringifyTime + jsonParseTime
+		// Run 100 iterations of parse
+		const parseStart = performance.now()
+		for (let i = 0; i < iterations; i++) {
+			JSON.parse(jsonStringified)
+		}
+		totalParseTime = performance.now() - parseStart
+
+		const avgStringifyTime = totalStringifyTime / iterations
+		const avgParseTime = totalParseTime / iterations
+		const avgTotalTime = avgStringifyTime + avgParseTime
 
 		// Send performance results to Telegram
-		const performanceMessage =
-			`🔧 *JSON Performance Test*\\n\\n` +
-			`Flights count: ${currentFlights.length}\\n` +
-			`JSON size: ${Math.round(jsonStringified.length / 1024)}KB\\n\\n` +
-			`⚡ Stringify: ${jsonStringifyTime.toFixed(2)}ms\\n` +
-			`⚡ Parse: ${jsonParseTime.toFixed(2)}ms\\n` +
-			`⚡ Total: ${totalJsonTime.toFixed(2)}ms\\n\\n` +
-			`Time: ${new Date().toLocaleTimeString()}`
+		const performanceMessage = `🔧 *JSON Performance Test* (100x avg)
+
+Flights count: ${currentFlights.length}
+JSON size: ${Math.round(jsonStringified.length / 1024)}KB
+
+⚡ Stringify: ${avgStringifyTime.toFixed(3)}ms avg
+⚡ Parse: ${avgParseTime.toFixed(3)}ms avg
+⚡ Total: ${avgTotalTime.toFixed(3)}ms avg
+
+📊 100x totals: ${totalStringifyTime.toFixed(2)}ms + ${totalParseTime.toFixed(2)}ms
+Time: ${new Date().toLocaleTimeString()}`
 
 		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
 

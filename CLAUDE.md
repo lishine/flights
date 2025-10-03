@@ -33,3 +33,18 @@ The project uses automatic version management via GitHub Actions:
 - **METADATA** namespace stores deployment metadata:
   - `version` - Current deployed version
   - `last_deploy_date` - Date of last deployment
+
+## Development Workflow
+
+**User Preference: Direct Commit & Push**
+- Work directly on main branch when possible
+- Skip pull request workflow for straightforward changes
+- Commit with descriptive messages using conventional commit format
+- Push directly to main to trigger automatic deployment
+- Use feature branches only when explicitly required or for complex features
+
+**Quality Requirements:**
+- Always run code quality checks (prettier, build, tests)
+- Ensure clean working directory before committing
+- Include comprehensive commit messages
+- Validate deployment success after push
