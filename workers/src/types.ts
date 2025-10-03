@@ -1,7 +1,9 @@
+type Status = 'LANDED' | 'CANCELED' | 'NOT FINAL' | 'FINAL' | 'DELAYED' | (string & {})
+
 export type Flight = {
 	id: string
 	flight_number: string
-	status: string
+	status: Status
 	sta: number
 	eta: number
 	city: string
@@ -12,7 +14,7 @@ export type Flight = {
 
 export type VercelFlightResponse = {
 	fln: string
-	status: string
+	status: Status
 	sta: number
 	eta: number
 	city: string

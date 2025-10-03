@@ -363,7 +363,10 @@ export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjec
 	const subscribedIds = result.toArray().map((row) => (row as { flight_id: string }).flight_id)
 
 	// Filter out tracked flights and sort
-	return allFlights.filter((flight) => !subscribedIds.includes(flight.id)).sort((a, b) => a.eta - b.eta)
+	return allFlights
+		.filter((flight) => !subscribedIds.includes(flight.id))
+		.sort((a, b) => a.eta - b.eta)
+		.filter((flight) => flight.status !== 'LANDED' && flight.status !== 'CANCELED')
 }
 
 /**

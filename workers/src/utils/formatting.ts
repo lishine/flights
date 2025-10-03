@@ -122,7 +122,7 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 			replyMarkup: null,
 		}
 	}
-	let message = '🎯 *Suggested Flights to Track:*\n\nThese flights arrive next:\n\n'
+	let message = '🎯 These flights arrive next:\n\n'
 	const inlineKeyboard: InlineKeyboardButton[][] = []
 
 	flights.forEach((flight, index) => {
@@ -137,6 +137,7 @@ export const formatFlightSuggestions = (flights: Flight[]) => {
 		message += `${index + 1}. 🛩️ *${escapeMarkdown(flight.flight_number)}*\n`
 		message += `   City: ${escapeMarkdown(flight.city || 'Unknown')}\n`
 		message += `   Airline: ${escapeMarkdown(flight.airline || 'Unknown')}\n`
+		message += `   Status: ${escapeMarkdown(flight.status || 'Unknown')}\n`
 		message += `   ⏱️ Arrival: ${escapeMarkdown(dayLabel ? `${dayLabel}, ${formattedTime}` : formattedTime)}\n\n`
 
 		// Add individual track button for each flight
