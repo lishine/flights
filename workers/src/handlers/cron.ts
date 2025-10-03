@@ -1,12 +1,12 @@
 import {
 	fetchLatestFlights,
 	cleanupCompletedFlights,
-	getSubscribedFlights,
+	getPreviousFlights,
+	storeFlights,
 	detectChanges,
 	writeStatusData,
 	writeErrorStatus,
-	writeFlightsData,
-} from '../services/flightData'
+} from '../services/kvFlightData'
 import { initializeSchema } from '../schema'
 import { sendFlightAlerts } from './alerts'
 import { sendTelegramMessage } from '../services/telegram'
@@ -68,27 +68,33 @@ Time: ${new Date().toLocaleTimeString()}`
 
 		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
 
+		// Get previous flights from KV for change detection
+		const previousFlights = await getPreviousFlights(ctx)
+		
+		// Store new flights in KV (this replaces the SQLite writes)
+		await storeFlights(currentFlights, ctx)
+		
 		writeStatusData(ctx, currentFlights.length)
-		// TEMPORARILY DISABLED: Stop saving currentflights to SQLite
-		// writeFlightsData(currentFlights, ctx)
 
-		// Single query to get subscribed flights with their previous state
-		const result = ctx.storage.sql.exec(`
-			SELECT f.* FROM flights f
-			INNER JOIN subscriptions s ON f.id = s.flight_id
-			ORDER BY f.eta DESC
-		`)
-		const previousFlights = result.toArray() as Flight[]
-
-		console.log(`Found ${previousFlights.length} subscribed flights`)
+		console.log(`Comparing ${currentFlights.length} current flights with ${previousFlights.length} previous flights`)
 
 		// Build maps for change detection
 		const previousFlightsMap = Object.fromEntries(previousFlights.map((f) => [f.id, f])) as Record<string, Flight>
 		const currentFlightsMap = Object.fromEntries(currentFlights.map((f) => [f.id, f])) as Record<string, Flight>
 
+		// Only check for changes in subscribed flights to reduce noise
+		const subscribedFlightIds = new Set(
+			ctx.storage.sql.exec('SELECT DISTINCT flight_id FROM subscriptions')
+				.toArray()
+				.map(row => (row as { flight_id: string }).flight_id)
+		)
+
 		const changesByFlight: Record<string, { flight: Flight; changes: string[] }> = {}
 
 		for (const flightId in previousFlightsMap) {
+			// Only process subscribed flights
+			if (!subscribedFlightIds.has(flightId)) continue
+			
 			const prevFlight = previousFlightsMap[flightId]
 			const currentFlight = currentFlightsMap[flightId]
 

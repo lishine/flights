@@ -1,4 +1,4 @@
-import { getUserTrackedFlightsWithData } from '../services/flightData'
+import { getUserTrackedFlightsWithData } from '../services/kvFlightData'
 import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../env'
 import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup } from '../types'
@@ -44,12 +44,12 @@ export const formatTrackingList = async (userFlights: string[], env: Env) => {
 }
 
 // New optimized version that takes chatId directly
-export const formatTrackingListOptimized = (
+export const formatTrackingListOptimized = async (
 	chatId: number,
 	env: Env,
 	ctx: DurableObjectState
-): { text: string; replyMarkup: InlineKeyboardMarkup | null } => {
-	const flights = getUserTrackedFlightsWithData(chatId, env, ctx)
+): Promise<{ text: string; replyMarkup: InlineKeyboardMarkup | null }> => {
+	const flights = await getUserTrackedFlightsWithData(chatId, env, ctx)
 
 	if (flights.length === 0)
 		return {

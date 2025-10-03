@@ -1,6 +1,6 @@
 import { sendTelegramMessage } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
-import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights } from '../services/flightData'
+import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights, storeFlights } from '../services/kvFlightData'
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions, escapeMarkdown } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
@@ -129,7 +129,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const results = []
 			for (const code of flightCodes) {
 				if (isValidFlightCode(code)) {
-					const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
+					const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 					if (flightId) {
 						addFlightTracking(chatId, flightId, env, ctx)
 						results.push(`✓ Now tracking ${code.toUpperCase()}`)
@@ -220,7 +220,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			}
 
 			// Update the message to show the new tracked flights list
-			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
+			const { text: trackedMessage, replyMarkup: trackedMarkup } = await formatTrackingListOptimized(chatId, env, ctx)
 			const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
 
 			// Combine the untrack buttons with navigation buttons
@@ -268,7 +268,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				],
 			}
 		} else if (data === 'show_tracked') {
-			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
+			const { text: trackedMessage, replyMarkup: trackedMarkup } = await formatTrackingListOptimized(chatId, env, ctx)
 			responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
 			// Combine the untrack buttons with navigation buttons
 			const navigationButtons = [
@@ -279,7 +279,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 			}
 		} else if (data === 'show_suggestions') {
-			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
+			const eligibleFlights = await getNotTrackedFlights(chatId, ctx)
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
 			responseText = `🎯 *Flight Suggestions*\n\n${text}`
 			replyMarkup = {
@@ -377,7 +377,7 @@ const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableO
 	const results = []
 	for (const code of flightCodes) {
 		if (isValidFlightCode(code)) {
-			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
+			const flightId = await getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 			if (flightId) {
 				addFlightTracking(chatId, flightId, env, ctx)
 				results.push(`✓ Now tracking ${code.toUpperCase()}`)
@@ -406,7 +406,7 @@ const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectSt
 }
 
 const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState) => {
-	const eligibleFlights = getNotTrackedFlights(chatId, ctx)
+	const eligibleFlights = await getNotTrackedFlights(chatId, ctx)
 
 	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
@@ -428,30 +428,15 @@ const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) =
 
 const handleTestData = async (chatId: number, env: Env, ctx: DurableObjectState) => {
 	try {
-		// Clear existing fake flights
-		ctx.storage.sql.exec("DELETE FROM flights WHERE flight_number LIKE 'FAKE_%'")
-
-		// Add new fake flights
+		// Generate fake flights
 		const fakeFlights = generateFakeFlights()
-		for (const flight of fakeFlights) {
-			ctx.storage.sql.exec(
-				`INSERT INTO flights (id, flight_number, status, sta, eta, city, airline, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				flight.id,
-				flight.flight_number,
-				flight.status,
-				flight.sta,
-				flight.eta,
-				flight.city,
-				flight.airline,
-				flight.created_at,
-				flight.updated_at
-			)
-		}
+		
+		// Store fake flights in KV (this replaces SQLite storage)
+		await storeFlights(fakeFlights, ctx)
 
 		await sendTelegramMessage(
 			chatId,
-			`✅ Added ${fakeFlights.length} test flights to the database.\n\n` +
+			`✅ Added ${fakeFlights.length} test flights to KV storage.\n\n` +
 				`Use /test-tracking to see flight suggestions with the test data.`,
 			env
 		)
