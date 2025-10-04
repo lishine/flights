@@ -171,14 +171,15 @@ export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectSt
 	}
 }
 
-export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: Env) => {
+export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env: Env, ctx: DurableObjectState<DOProps>) => {
 	const changes: string[] = []
 	const changeId = Math.random().toString(36).substring(7)
 	
 	if (env) {
 		sendAdmin(
 			`🔍 [CHANGE-${changeId}] Detecting changes for flight ${currentFlight.flight_number} (${currentFlight.id})`,
-			env
+			env,
+			ctx
 		)
 	}
 	
@@ -187,7 +188,8 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: E
 		if (env) {
 			sendAdmin(
 				`🔍 [CHANGE-${changeId}] Status change: ${prevFlight.status} -> ${currentFlight.status}`,
-				env
+				env,
+				ctx
 			)
 		}
 	}
@@ -200,7 +202,8 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: E
 		if (env) {
 			sendAdmin(
 				`🔍 [CHANGE-${changeId}] ETA change: ${prevTime} -> ${currentTime}`,
-				env
+				env,
+				ctx
 			)
 		}
 	}
@@ -209,7 +212,8 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: E
 		if (env) {
 			sendAdmin(
 				`🔍 [CHANGE-${changeId}] City change: ${prevFlight.city} -> ${currentFlight.city}`,
-				env
+				env,
+				ctx
 			)
 		}
 	}
@@ -218,23 +222,24 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: E
 		if (env) {
 			sendAdmin(
 				`🔍 [CHANGE-${changeId}] Airline change: ${prevFlight.airline} -> ${currentFlight.airline}`,
-				env
+				env,
+				ctx
 			)
 		}
 	}
 	
-	if (env) {
-		if (changes.length === 0) {
-			sendAdmin(
-				`🔍 [CHANGE-${changeId}] No changes detected for flight ${currentFlight.flight_number}`,
-				env
-			)
-		} else {
-			sendAdmin(
-				`🔍 [CHANGE-${changeId}] Total changes: ${changes.length}`,
-				env
-			)
-		}
+	if (changes.length === 0) {
+		sendAdmin(
+			`🔍 [CHANGE-${changeId}] No changes detected for flight ${currentFlight.flight_number}`,
+			env,
+			ctx
+		)
+	} else {
+		sendAdmin(
+			`🔍 [CHANGE-${changeId}] Total changes: ${changes.length}`,
+			env,
+			ctx
+		)
 	}
 	
 	return changes

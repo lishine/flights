@@ -84,7 +84,7 @@ export const sendTelegramMessage = async (
 export const sendAdmin = async (
 	message: string,
 	env: Env,
-	ctx?: { props: { debug: boolean } },
+	ctx: { props: { debug: boolean } },
 	type: 'debug' | 'deploy' | 'log' = 'debug'
 ) => {
 	// Deploy messages are always sent regardless of debug setting
@@ -93,9 +93,10 @@ export const sendAdmin = async (
 		return
 	}
 	
-	// For debug and log types, check if debug is enabled (if ctx is provided)
-	if (ctx && ctx.props.debug === false && type === 'debug') {
-		return // Don't send debug messages if debug is disabled
+	// For debug and log types, check if debug is enabled
+	// Don't send debug messages if debug is disabled
+	if (type === 'debug' && !ctx.props.debug) {
+		return
 	}
 	
 	// Send the message for log type or if debug is enabled

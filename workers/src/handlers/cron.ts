@@ -62,7 +62,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 			const currentFlight = currentFlightsMap[flightId]
 
 			if (currentFlight) {
-				const changes = detectChanges(prevFlight, currentFlight, env)
+				const changes = detectChanges(prevFlight, currentFlight, env, ctx)
 				if (changes.length > 0) {
 					changesByFlight[flightId] = { flight: currentFlight, changes }
 				}

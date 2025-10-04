@@ -35,7 +35,7 @@ export default {
 				}
 
 				console.log({ 'env.ADMIN_CHAT_ID': env.ADMIN_CHAT_ID })
-				await sendAdmin(message, env, undefined, 'deploy')
+				await sendAdmin(message, env, { props: { debug: true } }, 'deploy')
 
 				return new Response(JSON.stringify({ success: true, version }), {
 					status: 200,
