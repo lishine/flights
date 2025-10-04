@@ -3,7 +3,6 @@ import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../env'
 import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup, DOProps } from '../types'
 
-// Helper function to format time from timestamp
 export const formatTimeFromTimestamp = (timestamp: number) => {
 	const date = new Date(timestamp)
 	return date.toLocaleTimeString('en-GB', {
@@ -12,8 +11,13 @@ export const formatTimeFromTimestamp = (timestamp: number) => {
 		hour12: false,
 	})
 }
+export const formatDateFromTimestamp = (timestamp: number) => {
+	const date = new Date(timestamp)
+	return date.toLocaleString('en-GB', {
+		hour12: false,
+	})
+}
 
-// Helper function to get day label from timestamp
 export const getDayLabelFromTimestamp = (timestamp: number, ctx: DurableObjectState<DOProps>) => {
 	const date = new Date(timestamp)
 	const todayIdt = getCurrentIdtTime(ctx)
@@ -34,16 +38,37 @@ export const getDayLabelFromTimestamp = (timestamp: number, ctx: DurableObjectSt
 	}
 }
 
-export const formatTrackingList = async (userFlights: string[], env: Env) => {
-	if (userFlights.length === 0) return "You're not tracking any flights.\nUse /track LY086 to start!"
+export const formatTimeAgo = (timestamp: number, ctx: DurableObjectState<DOProps>): string => {
+	if (!timestamp || timestamp === 0) {
+		return '- not updated'
+	}
 
-	// Use the optimized function to get flight data in a single query
-	const chatId = parseInt(userFlights[0].split('_')[0]) // Extract chat ID from first flight ID (this is a hack, need to pass chatId properly)
-	// Actually, let's modify the function signature to accept chatId instead of userFlights array
-	return 'Function needs to be called with chatId parameter for optimization'
+	const now = getCurrentIdtTime(ctx).getTime()
+	const diffMs = now - timestamp
+	const diffMinutes = Math.floor(diffMs / 60000)
+
+	if (diffMinutes < 1) {
+		return 'just now'
+	} else if (diffMinutes < 60) {
+		return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`
+	} else if (diffMinutes < 1440) {
+		const hours = Math.floor(diffMinutes / 60)
+		return `${hours} hour${hours > 1 ? 's' : ''} ago`
+	} else {
+		const days = Math.floor(diffMinutes / 1440)
+		return `${days} day${days > 1 ? 's' : ''} ago`
+	}
 }
 
-// New optimized version that takes chatId directly
+export const formatTimestampForDisplay = (timestamp: number): string => {
+	if (!timestamp || timestamp === 0) {
+		return '- not updated'
+	}
+
+	const date = new Date(timestamp)
+	return date.toISOString().split('T')[0]
+}
+
 export const formatTrackingListOptimized = (
 	chatId: number,
 	env: Env,

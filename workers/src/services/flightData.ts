@@ -1,9 +1,10 @@
-import { getCurrentIdtTime, getIdtTimeString } from '../utils/dateTime'
+import { getCurrentIdtTime } from '../utils/dateTime'
 import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Env } from '../env'
 import type { Flight, VercelApiResponse, VercelFlightResponse, DOProps } from '../types'
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
+import { formatTimeFromTimestamp } from '../utils/formatting'
 export const generateFakeFlights = (ctx: DurableObjectState<DOProps>): Flight[] => {
 	const now = getCurrentIdtTime(ctx)
 	const futureTime1 = new Date(now.getTime() + 2 * 60 * 60 * 1000) // 2 hours from now
@@ -93,14 +94,13 @@ export const detectChanges = (
 	ctx: DurableObjectState<DOProps>
 ) => {
 	const changes: string[] = []
-	const changeId = Math.random().toString(36).substring(7)
 
 	if (prevFlight.status !== currentFlight.status) {
 		changes.push(`📍 Status: ${currentFlight.status}`)
 	}
 	if (prevFlight.eta !== currentFlight.eta) {
-		const prevDt = getIdtTimeString(prevFlight.eta)
-		const currentDt = getIdtTimeString(currentFlight.eta)
+		const prevDt = formatTimeFromTimestamp(prevFlight.eta)
+		const currentDt = formatTimeFromTimestamp(currentFlight.eta)
 		const prevTime = prevDt ?? 'TBA'
 		const currentTime = currentDt ?? 'TBA'
 		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
