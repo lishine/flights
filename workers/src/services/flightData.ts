@@ -47,14 +47,14 @@ export const generateFakeFlights = (ctx: DurableObjectState<DOProps>): Flight[] 
 	]
 }
 
-export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectState<DOProps>): number => {
+export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState<DOProps>): number => {
 	const nowIdt = getCurrentIdtTime(ctx)
 	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago
 
 	console.log(`Cleanup: cutoff=${new Date(cutoffTimestamp).toLocaleString()}`)
 
 	try {
-		const currentFlights = getCurrentFlightsFromStatus(ctx)
+		const currentFlights = getCurrentFlights(ctx)
 
 		const completedFlightIds = currentFlights
 			.filter(
@@ -205,7 +205,7 @@ export const writeFlightsData = (flights: Flight[], ctx: DurableObjectState<DOPr
 	}
 }
 
-export const getCurrentFlightsFromStatus = (ctx: DurableObjectState<DOProps>): Flight[] => {
+export const getCurrentFlights = (ctx: DurableObjectState<DOProps>): Flight[] => {
 	const cache = ctx.props.cache
 
 	if (cache.flights) {
@@ -228,7 +228,7 @@ export const getCurrentFlightsFromStatus = (ctx: DurableObjectState<DOProps>): F
 	return cache.flights
 }
 
-export const storeFlightsInStatus = (flights: Flight[], ctx: DurableObjectState<DOProps>): void => {
+export const storeFlights = (flights: Flight[], ctx: DurableObjectState<DOProps>): void => {
 	ctx.storage.sql.exec(
 		'INSERT OR REPLACE INTO status (key, value) VALUES (?, ?)',
 		'flights_data',
@@ -237,8 +237,8 @@ export const storeFlightsInStatus = (flights: Flight[], ctx: DurableObjectState<
 	console.log(`Stored ${flights.length} flights as JSON in status table`)
 }
 
-export const getUserTrackedFlightsFromStatus = (userId: number, ctx: DurableObjectState<DOProps>): Flight[] => {
-	const allFlights = getCurrentFlightsFromStatus(ctx)
+export const getUserTrackedFlights = (userId: number, ctx: DurableObjectState<DOProps>): Flight[] => {
+	const allFlights = getCurrentFlights(ctx)
 
 	const result = ctx.storage.sql.exec('SELECT flight_id FROM subscriptions WHERE telegram_id = ?', userId)
 	const subscribedIds = result.toArray().map((row) => (row as { flight_id: string }).flight_id)
@@ -246,21 +246,18 @@ export const getUserTrackedFlightsFromStatus = (userId: number, ctx: DurableObje
 	return allFlights.filter((flight) => subscribedIds.includes(flight.id)).sort((a, b) => a.eta - b.eta)
 }
 
-export const getFlightByIdFromStatus = (flightId: string, ctx: DurableObjectState<DOProps>): Flight | undefined => {
-	const allFlights = getCurrentFlightsFromStatus(ctx)
+export const getFlightById = (flightId: string, ctx: DurableObjectState<DOProps>): Flight | undefined => {
+	const allFlights = getCurrentFlights(ctx)
 	return allFlights.find((flight) => flight.id === flightId)
 }
 
-export const getFlightByNumberFromStatus = (
-	flightNumber: string,
-	ctx: DurableObjectState<DOProps>
-): Flight | undefined => {
-	const allFlights = getCurrentFlightsFromStatus(ctx)
+export const getFlightByNumber = (flightNumber: string, ctx: DurableObjectState<DOProps>): Flight | undefined => {
+	const allFlights = getCurrentFlights(ctx)
 	return allFlights.find((flight) => flight.flight_number === flightNumber)
 }
 
-export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjectState<DOProps>): Flight[] => {
-	const allFlights = getCurrentFlightsFromStatus(ctx)
+export const getNotTrackedFlights = (chatId: number, ctx: DurableObjectState<DOProps>): Flight[] => {
+	const allFlights = getCurrentFlights(ctx)
 
 	const result = ctx.storage.sql.exec('SELECT flight_id FROM subscriptions WHERE telegram_id = ?', chatId)
 	const subscribedIds = result.toArray().map((row) => (row as { flight_id: string }).flight_id)
@@ -271,12 +268,9 @@ export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjec
 		.filter((flight) => flight.status !== 'LANDED' && flight.status !== 'CANCELED')
 }
 
-export const getFlightIdByNumberFromStatus = (
-	flightNumber: string,
-	ctx: DurableObjectState<DOProps>
-): string | undefined => {
+export const getFlightIdByNumber = (flightNumber: string, ctx: DurableObjectState<DOProps>): string | undefined => {
 	const nowIdt = getCurrentIdtTime(ctx)
-	const allFlights = getCurrentFlightsFromStatus(ctx)
+	const allFlights = getCurrentFlights(ctx)
 
 	const futureFlights = allFlights
 		.filter((flight) => flight.flight_number === flightNumber && flight.eta > nowIdt.getTime())

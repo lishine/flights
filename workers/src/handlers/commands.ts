@@ -1,11 +1,6 @@
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
-import {
-	getFlightIdByNumberFromStatus,
-	getNotTrackedFlightsFromStatus,
-	generateFakeFlights,
-	storeFlightsInStatus,
-} from '../services/flightData'
+import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights, storeFlights } from '../services/flightData'
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions, escapeMarkdown } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
@@ -133,7 +128,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const results = []
 			for (const code of flightCodes) {
 				if (isValidFlightCode(code)) {
-					const flightId = getFlightIdByNumberFromStatus(code.toUpperCase().replace(' ', ''), ctx)
+					const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 					if (flightId) {
 						addFlightTracking(chatId, flightId, env, ctx)
 						results.push(`✓ Now tracking ${code.toUpperCase()}`)
@@ -168,7 +163,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const currentPage = parseInt(cursorStr) || 0
 			const nextPage = currentPage + 1
 
-			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
 			const startIndex = nextPage * 5
 			const endIndex = startIndex + 5
 			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
@@ -329,7 +324,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		} else if (data === 'show_suggestions') {
 			ctx.storage.kv.put(`pagination_cursor_${chatId}`, '0')
 
-			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
 
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 				eligibleFlights.slice(0, 5),
@@ -366,7 +361,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		} else if (data.startsWith('suggestions_page:')) {
 			// Handle pagination
 			const page = parseInt(data.split(':')[1])
-			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
 			const startIndex = page * 5
 			const endIndex = startIndex + 5
 			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
@@ -533,7 +528,7 @@ const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableO
 	const results = []
 	for (const code of flightCodes) {
 		if (isValidFlightCode(code)) {
-			const flightId = getFlightIdByNumberFromStatus(code.toUpperCase().replace(' ', ''), ctx)
+			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
 			if (flightId) {
 				addFlightTracking(chatId, flightId, env, ctx)
 				results.push(`✓ Now tracking ${code.toUpperCase()}`)
@@ -562,7 +557,7 @@ const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectSt
 }
 
 const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
-	const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+	const eligibleFlights = getNotTrackedFlights(chatId, ctx)
 
 	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length, ctx)
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
@@ -587,7 +582,7 @@ const handleTestData = async (chatId: number, env: Env, ctx: DurableObjectState<
 		const fakeFlights = generateFakeFlights(ctx)
 
 		// Store fake flights using new JSON approach (replaces SQLite storage)
-		storeFlightsInStatus(fakeFlights, ctx)
+		storeFlights(fakeFlights, ctx)
 
 		await sendTelegramMessage(
 			chatId,

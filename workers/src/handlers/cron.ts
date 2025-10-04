@@ -1,8 +1,8 @@
 import {
 	fetchLatestFlights,
-	cleanupCompletedFlightsFromStatus,
-	getCurrentFlightsFromStatus,
-	storeFlightsInStatus,
+	cleanupCompletedFlights,
+	getCurrentFlights,
+	storeFlights,
 	detectChanges,
 	writeStatusData,
 	writeErrorStatus,
@@ -23,8 +23,8 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 		const currentFlights = await fetchLatestFlights(env, ctx)
 		writeStatusData(ctx, currentFlights.length)
 
-		const previousFlights = getCurrentFlightsFromStatus(ctx)
-		storeFlightsInStatus(currentFlights, ctx)
+		const previousFlights = getCurrentFlights(ctx)
+		storeFlights(currentFlights, ctx)
 
 		const subscribedResult = ctx.storage.sql.exec('SELECT DISTINCT flight_id FROM subscriptions')
 		const subscribedFlightIds = new Set(
@@ -70,7 +70,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 
 		if (now - lastCleanupTime >= tenMinutes) {
 			console.log('Running cleanup (10 minute interval)')
-			cleanupCompletedFlightsFromStatus(env, ctx)
+			cleanupCompletedFlights(env, ctx)
 
 			ctx.storage.sql.exec(
 				"INSERT INTO status (key, value) VALUES ('last_cleanup_time', ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",

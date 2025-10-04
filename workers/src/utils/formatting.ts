@@ -1,4 +1,4 @@
-import { getUserTrackedFlightsFromStatus } from '../services/flightData'
+import { getUserTrackedFlights } from '../services/flightData'
 import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../env'
 import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup, DOProps } from '../types'
@@ -49,7 +49,7 @@ export const formatTrackingListOptimized = (
 	env: Env,
 	ctx: DurableObjectState<DOProps>
 ): { text: string; replyMarkup: InlineKeyboardMarkup | null } => {
-	const flights = getUserTrackedFlightsFromStatus(chatId, ctx)
+	const flights = getUserTrackedFlights(chatId, ctx)
 
 	if (flights.length === 0)
 		return {
@@ -115,24 +115,29 @@ export const escapeMarkdown = (text: string) => {
 		.replace(/~/g, '\\~') // Escape tildes
 }
 
-export const formatFlightSuggestions = (flights: Flight[], currentPage: number = 0, totalFlights: number = 0, ctx?: DurableObjectState<DOProps>) => {
+export const formatFlightSuggestions = (
+	flights: Flight[],
+	currentPage: number = 0,
+	totalFlights: number = 0,
+	ctx?: DurableObjectState<DOProps>
+) => {
 	if (flights.length === 0) {
 		return {
 			text: 'No flights available for tracking right now (need 1+ hour until arrival).',
 			replyMarkup: null,
 		}
 	}
-	
+
 	const startFlightNumber = currentPage * 5 + 1
 	const endFlightNumber = startFlightNumber + flights.length - 1
-	
+
 	let message = `🎯 These flights arrive next:\n\n`
-	
+
 	// Add page info if we have pagination
 	if (totalFlights > 5) {
 		message += `📄 Showing flights ${startFlightNumber}-${endFlightNumber} of ${totalFlights}\n\n`
 	}
-	
+
 	const inlineKeyboard: InlineKeyboardButton[][] = []
 
 	flights.forEach((flight, index) => {
