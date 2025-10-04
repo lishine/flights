@@ -283,9 +283,8 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			ctx.storage.kv.put(`pagination_cursor_${chatId}`, '0')
 			
 			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
-			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID),`eligible flights length: ${eligibleFlights.length}`,env, false)
+			
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length)
-			responseText = `🎯 *Flight Suggestions*\n\n${text}`
 			
 			// Build navigation buttons
 			const navigationButtons = [
@@ -309,6 +308,10 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			}
 			
 			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+			
+			// Add debug info to the response text
+			const debugInfo = `\n\n🐛 *Debug:* ${eligibleFlights.length} eligible flights, Next button: ${eligibleFlights.length > 5 ? 'YES' : 'NO'}`
+			responseText = `🎯 *Flight Suggestions*\n\n${text}${debugInfo}`
 			
 			replyMarkup = {
 				inline_keyboard: allButtons,
