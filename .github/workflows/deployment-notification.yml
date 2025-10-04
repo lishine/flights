@@ -6,7 +6,7 @@ on:
 jobs:
     notify:
         runs-on: ubuntu-latest
-        if: github.event.deployment_status.state == 'success'
+        if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'production'
         permissions:
             contents: write
 
@@ -52,6 +52,20 @@ jobs:
 
             - name: Wait for deployment to be ready
               run: sleep 10
+
+            - name: Verify deployment is actually working
+              run: |
+                # Check if the deployed site is actually responding
+                HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://flights.vim55k.workers.dev/" || echo "000")
+                echo "Deployment health check HTTP status: $HTTP_STATUS"
+                
+                if [ "$HTTP_STATUS" != "200" ]; then
+                  echo "❌ Deployment health check failed (HTTP $HTTP_STATUS)"
+                  echo "Skipping deployment notification"
+                  exit 1
+                else
+                  echo "✅ Deployment health check passed"
+                fi
 
             - name: Call deploy webhook
               run: |
