@@ -21,8 +21,6 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
 
-		// await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
-
 		writeStatusData(ctx, currentFlights.length)
 
 		const previousFlights = getCurrentFlightsFromStatus(ctx)

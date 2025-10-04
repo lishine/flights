@@ -3,6 +3,7 @@ import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Env } from '../env'
 import type { Flight, VercelApiResponse, VercelFlightResponse } from '../types'
+import { sendTelegramMessage } from '../services/telegram'
 
 // Legacy functions - replaced by JSON-based versions
 // export const getCurrentFlights = (ctx: DurableObjectState) => {
@@ -194,7 +195,7 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight) => {
 export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState) => {
 	const rawApiData = await ofetch<VercelApiResponse>(VERCEL_FLIGHTS_API_URL)
 	console.log('fetched from vercel', rawApiData.Flights.length)
-
+await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID),getIdtTimeString(rawApiData.updated) , env, false)
 	const filterAndTransformFlights = (rawFlights: VercelFlightResponse[]) => {
 		return rawFlights.map((flight) => {
 			const flightId = `${flight.fln}_${flight.sta}`
