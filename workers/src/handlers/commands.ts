@@ -284,6 +284,17 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			
 			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
 			
+			// SEND DEBUG MESSAGE TO YOUR CHAT
+			await sendTelegramMessage(
+				chatId,
+				`🐛 DEBUG INFO:\n` +
+				`Total eligible flights: ${eligibleFlights.length}\n` +
+				`Will show Next button: ${eligibleFlights.length > 5 ? '✅ YES' : '❌ NO'}\n` +
+				`Showing flights: 1-${Math.min(5, eligibleFlights.length)}`,
+				env,
+				false
+			)
+			
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length)
 			
 			// Build navigation buttons
