@@ -222,7 +222,9 @@ export default async function handler(req, res) {
 
 		res.status(200).json({
 			Flights: transformedFlights,
-		})
+			updated:nowIdt.getTime()
+			})
+	
 	} catch (err) {
 		console.error(`Error:`, err)
 		res.status(500).json({

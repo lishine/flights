@@ -21,18 +21,10 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
 
-		// JSON performance testing - 10000 iterations for measurable results
-		const iterations = 100
-		let totalStringifyTime = 0
-		let totalParseTime = 0
-		let jsonStringified = ''
-
 		// await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), performanceMessage, env, false)
 
 		writeStatusData(ctx, currentFlights.length)
 
-		// NEW JSON APPROACH: Get previous flights from JSON, store current flights as JSON
-		// 1. Get previous flights from JSON (these become "previous" for change detection)
 		const previousFlights = getCurrentFlightsFromStatus(ctx)
 
 		// 2. Store current flights as JSON (single SQLite write!)
