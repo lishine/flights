@@ -188,10 +188,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
 
 			// Navigation buttons
-			const navigationButtons = [
-				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
-			]
+			const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
 
 			// Pagination row
 			const paginationRow = []
@@ -281,7 +278,6 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const navigationButtons = [
 				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
 				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
 			]
 			const finalMarkup = {
 				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
@@ -329,7 +325,6 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const navigationButtons = [
 				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
 				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
 			]
 			replyMarkup = {
 				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
@@ -357,10 +352,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			)
 
 			// Build navigation buttons
-			const navigationButtons = [
-				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
-			]
+			const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
 
 			// Build pagination buttons - show Next if there are more than 5 flights
 			const paginationRow = []
@@ -404,10 +396,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			responseText = `🎯 *Flight Suggestions*\n\n${text}`
 
 			// Build navigation buttons
-			const navigationButtons = [
-				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
-			]
+			const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
 
 			// Build pagination buttons row
 			const paginationRow = []
