@@ -293,20 +293,25 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
 			]
 			
-			// Add pagination buttons for initial display
-			const paginationButtons = []
-			
-			// Show Next button only if there are more than 5 flights
+			// Build pagination buttons - show Next if there are more than 5 flights
+			const paginationRow = []
 			if (eligibleFlights.length > 5) {
-				paginationButtons.push([{ text: 'Next ➡️', callback_data: 'suggestions_page:1' }])
+				paginationRow.push({ text: 'Next ➡️', callback_data: 'suggestions_page:1' })
 			}
 			
+			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
+			const allButtons = [
+				...navigationButtons,
+			]
+			
+			if (paginationRow.length > 0) {
+				allButtons.push(paginationRow)
+			}
+			
+			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+			
 			replyMarkup = {
-				inline_keyboard: [
-					...navigationButtons,
-					...(suggestionsMarkup?.inline_keyboard || []),
-					...paginationButtons,
-				],
+				inline_keyboard: allButtons,
 			}
 		} else if (data.startsWith('suggestions_page:')) {
 			// Handle pagination
@@ -328,25 +333,28 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
 			]
 			
-			// Add pagination buttons
-			const paginationButtons = []
-			
-			// Previous button (not shown on first page)
+			// Build pagination buttons row
+			const paginationRow = []
 			if (page > 0) {
-				paginationButtons.push([{ text: '⬅️ Previous', callback_data: `suggestions_page:${page - 1}` }])
+				paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${page - 1}` })
+			}
+			if (endIndex < eligibleFlights.length) {
+				paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${page + 1}` })
 			}
 			
-			// Next button (only shown if there are more flights)
-			if (endIndex < eligibleFlights.length) {
-				paginationButtons.push([{ text: 'Next ➡️', callback_data: `suggestions_page:${page + 1}` }])
+			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
+			const allButtons = [
+				...navigationButtons,
+			]
+			
+			if (paginationRow.length > 0) {
+				allButtons.push(paginationRow)
 			}
+			
+			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
 			
 			replyMarkup = {
-				inline_keyboard: [
-					...navigationButtons,
-					...(suggestionsMarkup?.inline_keyboard || []),
-					...paginationButtons,
-				],
+				inline_keyboard: allButtons,
 			}
 		}
 		try {

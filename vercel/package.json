@@ -2,6 +2,9 @@
   "name": "tlv-scraper",
   "version": "1.0.0",
   "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "pnpm": ">=9.0.0"
+  },
   "type": "module",
   "main": "index.js",
   "scripts": {

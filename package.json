@@ -1,5 +1,8 @@
 {
   "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "pnpm": ">=9.0.0"
+  },
   "dependencies": {
     "prettier": "^3.6.2"
   }
