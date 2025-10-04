@@ -279,15 +279,58 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 			}
 		} else if (data === 'show_suggestions') {
+			// Reset pagination cursor when showing suggestions fresh
+			ctx.storage.kv.put(`pagination_cursor_${chatId}`, '0')
+			
 			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
 			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID),`eligible flights length: ${eligibleFlights.length}`,env, false)
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length)
 			responseText = `🎯 *Flight Suggestions*\n\n${text}`
 			replyMarkup = {
 				inline_keyboard: [
 					[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
 					[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
 					...(suggestionsMarkup?.inline_keyboard || []),
+				],
+			}
+		} else if (data.startsWith('suggestions_page:')) {
+			// Handle pagination
+			const page = parseInt(data.split(':')[1])
+			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+			const startIndex = page * 5
+			const endIndex = startIndex + 5
+			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
+			
+			// Update cursor in storage
+			ctx.storage.kv.put(`pagination_cursor_${chatId}`, page.toString())
+			
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(pageFlights, page, eligibleFlights.length)
+			responseText = `🎯 *Flight Suggestions*\n\n${text}`
+			
+			// Build navigation buttons
+			const navigationButtons = [
+				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+			]
+			
+			// Add pagination buttons
+			const paginationButtons = []
+			
+			// Previous button (not shown on first page)
+			if (page > 0) {
+				paginationButtons.push([{ text: '⬅️ Previous', callback_data: `suggestions_page:${page - 1}` }])
+			}
+			
+			// Next button (only shown if there are more flights)
+			if (endIndex < eligibleFlights.length) {
+				paginationButtons.push([{ text: 'Next ➡️', callback_data: `suggestions_page:${page + 1}` }])
+			}
+			
+			replyMarkup = {
+				inline_keyboard: [
+					...navigationButtons,
+					...(suggestionsMarkup?.inline_keyboard || []),
+					...paginationButtons,
 				],
 			}
 		}
@@ -409,7 +452,7 @@ const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectSt
 const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState) => {
 	const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
 
-	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
+	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length)
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
 }
 
