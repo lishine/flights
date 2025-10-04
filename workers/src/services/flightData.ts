@@ -171,10 +171,15 @@ export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectSt
 	}
 }
 
-export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env: Env, ctx: DurableObjectState<DOProps>) => {
+export const detectChanges = (
+	prevFlight: Flight,
+	currentFlight: Flight,
+	env: Env,
+	ctx: DurableObjectState<DOProps>
+) => {
 	const changes: string[] = []
 	const changeId = Math.random().toString(36).substring(7)
-	
+
 	if (env) {
 		sendAdmin(
 			`🔍 [CHANGE-${changeId}] Detecting changes for flight ${currentFlight.flight_number} (${currentFlight.id})`,
@@ -182,7 +187,7 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env: En
 			ctx
 		)
 	}
-	
+
 	if (prevFlight.status !== currentFlight.status) {
 		changes.push(`📍 Status: ${currentFlight.status}`)
 		if (env) {
@@ -200,21 +205,13 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env: En
 		const currentTime = currentDt ?? 'TBA'
 		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
 		if (env) {
-			sendAdmin(
-				`🔍 [CHANGE-${changeId}] ETA change: ${prevTime} -> ${currentTime}`,
-				env,
-				ctx
-			)
+			sendAdmin(`🔍 [CHANGE-${changeId}] ETA change: ${prevTime} -> ${currentTime}`, env, ctx)
 		}
 	}
 	if (prevFlight.city !== currentFlight.city) {
 		changes.push(`🏙️ City: ${currentFlight.city || 'Unknown'}`)
 		if (env) {
-			sendAdmin(
-				`🔍 [CHANGE-${changeId}] City change: ${prevFlight.city} -> ${currentFlight.city}`,
-				env,
-				ctx
-			)
+			sendAdmin(`🔍 [CHANGE-${changeId}] City change: ${prevFlight.city} -> ${currentFlight.city}`, env, ctx)
 		}
 	}
 	if (prevFlight.airline !== currentFlight.airline) {
@@ -227,21 +224,13 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env: En
 			)
 		}
 	}
-	
+
 	if (changes.length === 0) {
-		sendAdmin(
-			`🔍 [CHANGE-${changeId}] No changes detected for flight ${currentFlight.flight_number}`,
-			env,
-			ctx
-		)
+		sendAdmin(`🔍 [CHANGE-${changeId}] No changes detected for flight ${currentFlight.flight_number}`, env, ctx)
 	} else {
-		sendAdmin(
-			`🔍 [CHANGE-${changeId}] Total changes: ${changes.length}`,
-			env,
-			ctx
-		)
+		sendAdmin(`🔍 [CHANGE-${changeId}] Total changes: ${changes.length}`, env, ctx)
 	}
-	
+
 	return changes
 }
 
@@ -249,7 +238,7 @@ export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState<DOPro
 	const rawApiData = await ofetch<VercelApiResponse>(VERCEL_FLIGHTS_API_URL)
 	console.log('fetched from vercel', rawApiData.Flights.length)
 
-   // await sendAdmin(getIdtTimeString(rawApiData.updated), env)
+	// await sendAdmin(getIdtTimeString(rawApiData.updated), env)
 	const filterAndTransformFlights = (rawFlights: VercelFlightResponse[]) => {
 		return rawFlights.map((flight) => {
 			const flightId = `${flight.fln}_${flight.sta}`
@@ -346,9 +335,9 @@ export const writeFlightsData = (flights: Flight[], ctx: DurableObjectState<DOPr
 export const getCurrentFlightsFromStatus = (ctx: DurableObjectState<DOProps>): Flight[] => {
 	const cache = ctx.props.cache
 
-	if (cache.flights) {
-		return cache.flights
-	}
+	// if (cache.flights) {
+	// 	return cache.flights
+	// }
 	const result = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'flights_data')
 	const row = result.toArray()[0] as { value: string } | undefined
 
@@ -403,7 +392,10 @@ export const getFlightByIdFromStatus = (flightId: string, ctx: DurableObjectStat
 /**
  * Get flight by flight number from JSON data
  */
-export const getFlightByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState<DOProps>): Flight | undefined => {
+export const getFlightByNumberFromStatus = (
+	flightNumber: string,
+	ctx: DurableObjectState<DOProps>
+): Flight | undefined => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
 	return allFlights.find((flight) => flight.flight_number === flightNumber)
 }
@@ -428,7 +420,10 @@ export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjec
 /**
  * Get flight ID by flight number (prioritizing future flights) from JSON data
  */
-export const getFlightIdByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState<DOProps>): string | undefined => {
+export const getFlightIdByNumberFromStatus = (
+	flightNumber: string,
+	ctx: DurableObjectState<DOProps>
+): string | undefined => {
 	const nowIdt = getCurrentIdtTime(ctx)
 	const allFlights = getCurrentFlightsFromStatus(ctx)
 
