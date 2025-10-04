@@ -59,7 +59,7 @@ export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState<DOProp
 
 		const completedFlightIds = currentFlights
 			.filter(
-				(flight) => flight.status === 'LANDED' || flight.status === 'CANCELED' || flight.eta < cutoffTimestamp
+				(flight) => (flight.status === 'LANDED' && flight.eta < cutoffTimestamp) || flight.status === 'CANCELED'
 			)
 			.map((flight) => flight.id)
 

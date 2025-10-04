@@ -66,7 +66,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 		const lastCleanupRow = lastCleanupResult.toArray()[0] as { value: string } | undefined
 		const lastCleanupTime = lastCleanupRow ? parseInt(lastCleanupRow.value) : 0
 		const now = getCurrentIdtTime(ctx).getTime()
-		const tenMinutes = 10 * 60 * 1000
+		const tenMinutes = 3 * 60 * 1000
 
 		if (now - lastCleanupTime >= tenMinutes) {
 			console.log('Running cleanup (10 minute interval)')
