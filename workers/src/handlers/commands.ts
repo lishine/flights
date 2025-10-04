@@ -14,7 +14,6 @@ import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
 import type { DOProps } from '../types'
 import { ofetch } from 'ofetch'
-import { handleShowSuggestions, handleSuggestionsPage } from './suggestion-commands'
 
 export const isDataQuery = (query: CallbackQuery) => {
 	return 'data' in query
@@ -147,6 +146,8 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 					results.push(`❌ Invalid flight code: ${code}`)
 				}
 			}
+
+			// ✅ Answer callback so Telegram shows success
 			try {
 				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 					method: 'POST',
@@ -161,6 +162,50 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
 				})
 			}
+
+			// ✅ Now behave like pressing "Next"
+			// get current pagination cursor
+			const cursorKey = `pagination_cursor_${chatId}`
+			const cursorStr = (await ctx.storage.kv.get<string>(cursorKey)) || '0'
+			const currentPage = parseInt(cursorStr) || 0
+			const nextPage = currentPage + 1
+
+			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+			const startIndex = nextPage * 5
+			const endIndex = startIndex + 5
+			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
+
+			// update cursor
+			await ctx.storage.kv.put(cursorKey, nextPage.toString())
+
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
+				pageFlights,
+				nextPage,
+				eligibleFlights.length,
+				ctx
+			)
+
+			let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
+
+			// Navigation buttons
+			const navigationButtons = [
+				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+			]
+
+			// Pagination row
+			const paginationRow = []
+			if (nextPage > 0) {
+				paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${nextPage - 1}` })
+			}
+			if (endIndex < eligibleFlights.length) {
+				paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${nextPage + 1}` })
+			}
+
+			const allButtons = [...navigationButtons]
+			if (paginationRow.length > 0) allButtons.push(paginationRow)
+			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+
 			try {
 				await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
 					method: 'POST',
@@ -168,19 +213,21 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 					body: JSON.stringify({
 						chat_id: chatId,
 						message_id: messageId,
-						text: results.join('\n'),
+						text: responseText,
 						parse_mode: 'Markdown',
+						reply_markup: { inline_keyboard: allButtons },
 					}),
 				})
 			} catch (error) {
-				console.error('Failed to edit message for track_suggested:', {
+				console.error('Failed to edit message after track_suggested:', {
 					chatId,
 					messageId,
-					results,
+					responseText,
 					error: error instanceof Error ? error.message : 'Unknown error',
 					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
 				})
 			}
+
 			return new Response('OK')
 		}
 
@@ -286,19 +333,101 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 			}
 		} else if (data === 'show_suggestions') {
-			const { responseText: resText, replyMarkup: resMarkup } = await handleShowSuggestions(chatId, env, ctx)
-			responseText = resText
-			replyMarkup = resMarkup
-		} else if (data.startsWith('suggestions_page:')) {
-			const page = parseInt(data.split(':')[1])
-			const { responseText: resText, replyMarkup: resMarkup } = await handleSuggestionsPage(
-				chatId,
-				page,
-				env,
+			// Reset pagination cursor when showing suggestions fresh
+			ctx.storage.kv.put(`pagination_cursor_${chatId}`, '0')
+
+			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+
+			// SEND DEBUG MESSAGE TO YOUR CHAT
+			//await sendAdmin(
+			//	`🐛 DEBUG INFO:\n` +
+			//	`Total eligible flights: ${eligibleFlights.length}\n` +
+			//`Will show Next button: ${eligibleFlights.length > 5 ? '✅ YES' : '❌ NO'}\n` +
+			//`Showing flights: 1-${Math.min(5, eligibleFlights.length)}`,
+			//env
+			//)
+
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
+				eligibleFlights.slice(0, 5),
+				0,
+				eligibleFlights.length,
 				ctx
 			)
-			responseText = resText
-			replyMarkup = resMarkup
+
+			// Build navigation buttons
+			const navigationButtons = [
+				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+			]
+
+			// Build pagination buttons - show Next if there are more than 5 flights
+			const paginationRow = []
+			if (eligibleFlights.length > 5) {
+				paginationRow.push({ text: 'Next ➡️', callback_data: 'suggestions_page:1' })
+			}
+
+			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
+			const allButtons = [...navigationButtons]
+
+			if (paginationRow.length > 0) {
+				allButtons.push(paginationRow)
+			}
+
+			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+
+			// Add debug info to the response text
+			const debugInfo = `\n\n🐛 *Debug:* ${eligibleFlights.length} eligible flights, Next button: ${eligibleFlights.length > 5 ? 'YES' : 'NO'}`
+			responseText = `🎯 *Flight Suggestions*\n\n${text}${debugInfo}`
+
+			replyMarkup = {
+				inline_keyboard: allButtons,
+			}
+		} else if (data.startsWith('suggestions_page:')) {
+			// Handle pagination
+			const page = parseInt(data.split(':')[1])
+			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+			const startIndex = page * 5
+			const endIndex = startIndex + 5
+			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
+
+			// Update cursor in storage
+			ctx.storage.kv.put(`pagination_cursor_${chatId}`, page.toString())
+
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
+				pageFlights,
+				page,
+				eligibleFlights.length,
+				ctx
+			)
+			responseText = `🎯 *Flight Suggestions*\n\n${text}`
+
+			// Build navigation buttons
+			const navigationButtons = [
+				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+			]
+
+			// Build pagination buttons row
+			const paginationRow = []
+			if (page > 0) {
+				paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${page - 1}` })
+			}
+			if (endIndex < eligibleFlights.length) {
+				paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${page + 1}` })
+			}
+
+			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
+			const allButtons = [...navigationButtons]
+
+			if (paginationRow.length > 0) {
+				allButtons.push(paginationRow)
+			}
+
+			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+
+			replyMarkup = {
+				inline_keyboard: allButtons,
+			}
 		}
 		try {
 			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
