@@ -280,6 +280,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			// Combine the untrack buttons with navigation buttons
 			const navigationButtons = [
 				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
 				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
 			]
 			const finalMarkup = {
@@ -327,6 +328,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			// Combine the untrack buttons with navigation buttons
 			const navigationButtons = [
 				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
 				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
 			]
 			replyMarkup = {
