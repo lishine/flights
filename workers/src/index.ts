@@ -1,6 +1,6 @@
 import { FlightDO } from './durable'
 import { Env } from './env'
-import { sendTelegramMessage } from './services/telegram'
+import { sendTelegramMessage, sendAdmin } from './services/telegram'
 import { getCurrentIdtDateStringNoCache, getCurrentIdtTimeNoCache } from './utils/dateTime'
 
 // Export the Durable Object class so the runtime can find it
@@ -35,7 +35,7 @@ export default {
 				}
 
 				console.log({ 'env.ADMIN_CHAT_ID': env.ADMIN_CHAT_ID })
-				await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
+				await sendAdmin(message, env, undefined, 'deploy')
 
 				return new Response(JSON.stringify({ success: true, version }), {
 					status: 200,

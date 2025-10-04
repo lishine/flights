@@ -1,4 +1,4 @@
-import { sendTelegramMessage } from '../services/telegram'
+import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import type { Env } from '../env'
 import type { Flight, DOProps } from '../types'
 
@@ -33,11 +33,10 @@ export const sendFlightAlerts = async (
 		}
 	}
 	
-	await sendTelegramMessage(
-		parseInt(env.ADMIN_CHAT_ID),
+	await sendAdmin(
 		`🚨 [ALERT-${alertId}] Starting to send flight alerts for ${Object.keys(changesByFlight).length} flights\nFound ${allSubs.length} total subscriptions${duplicateCount > 0 ? ` (${duplicateCount} duplicates for flights: ${duplicates.join(', ')})` : ''}`,
 		env,
-		false
+		ctx
 	)
 
 	const trackingMap: Record<string, string[]> = {} // flight_id -> users
@@ -52,34 +51,31 @@ export const sendFlightAlerts = async (
 		const subscribers = trackingMap[flightChange.flight.id]
 
 		if (subscribers && subscribers.length > 0) {
-			await sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			await sendAdmin(
 				`🚨 [ALERT-${alertId}] Flight ${flightChange.flight.flight_number} (${flightId}) changes:\n${flightChange.changes.join(', ')}\nSubscribers: ${subscribers.join(', ')}`,
 				env,
-				false
+				ctx
 			)
 
 			// Send alerts to all subscribers
 			for (const telegram_id of subscribers) {
 				await sendAlert(Number(telegram_id), flightChange.flight, flightChange.changes, env)
-				await sendTelegramMessage(
-					parseInt(env.ADMIN_CHAT_ID),
+				await sendAdmin(
 					`📤 [ALERT-${alertId}] Sent alert to user ${telegram_id} for flight ${flightChange.flight.flight_number}`,
 					env,
-					false
+					ctx
 				)
 			}
 		} else {
-			await sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			await sendAdmin(
 				`⚠️ [ALERT-${alertId}] No subscribers found for flight ${flightChange.flight.flight_number} (${flightId})`,
 				env,
-				false
+				ctx
 			)
 		}
 	}
 	
-	await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `✅ [ALERT-${alertId}] Alert sending completed`, env, false)
+	await sendAdmin(`✅ [ALERT-${alertId}] Alert sending completed`, env, ctx)
 }
 
 const sendAlert = async (userId: number, flight: Flight, changes: string[], env: Env) => {

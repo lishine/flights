@@ -4,7 +4,7 @@ import { runScheduledJob } from './handlers/cron'
 import { handleCommand } from './handlers/commands'
 import { resetSchema } from './schema'
 import { CRON_PERIOD_SECONDS } from './utils/constants'
-import { sendTelegramMessage } from './services/telegram'
+import { sendTelegramMessage, sendAdmin } from './services/telegram'
 import { DOProps } from './types'
 
 export class FlightDO extends DurableObject<Env, DOProps> {
@@ -32,7 +32,8 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 
 	private resetCache() {
 		Object.assign(this.ctx.props, {
-			cache: {}
+			cache: {},
+			debug: false
 		})
 	}
 
@@ -118,7 +119,7 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 			alarmMessage += `\n⚠️ WARNING: Existing alarm found at ${new Date(existingAlarm).toISOString()}`
 		}
 		
-		await this.sendAdminMessage(alarmMessage)
+		await sendAdmin(alarmMessage, this.env, this.ctx)
 
 		runScheduledJob(this.env, this.ctx)
 
@@ -126,19 +127,11 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 
 		const period = CRON_PERIOD_SECONDS * 1000
 		const nextAlarmTime = Date.now() + period
-		await this.sendAdminMessage(`⏰ [ALARM-${alarmId}] Setting next alarm for ${period}ms from now (${new Date(nextAlarmTime).toISOString()})`)
+		await sendAdmin(`⏰ [ALARM-${alarmId}] Setting next alarm for ${period}ms from now (${new Date(nextAlarmTime).toISOString()})`, this.env, this.ctx)
 		await this.ctx.storage.setAlarm(nextAlarmTime)
-		await this.sendAdminMessage(`✅ [ALARM-${alarmId}] Alarm completed`)
+		await sendAdmin(`✅ [ALARM-${alarmId}] Alarm completed`, this.env, this.ctx)
 	}
 
-	// Helper method to send messages to admin
-	private async sendAdminMessage(message: string): Promise<void> {
-		try {
-			await sendTelegramMessage(parseInt(this.env.ADMIN_CHAT_ID), message, this.env, false)
-		} catch (error) {
-			console.error('Failed to send admin message:', error)
-		}
-	}
 
 	/**
 	 * Example method using SQLite-backed SQL API (official API)

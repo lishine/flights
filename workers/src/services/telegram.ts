@@ -2,6 +2,7 @@ import type { Env } from '../env'
 import { $fetch } from 'ofetch'
 import { getTelegramUrl } from '../utils/constants'
 import { getCurrentIdtTimeNoCache } from '../utils/dateTime'
+import type { DOProps } from '../types'
 
 export const sendTelegramMessage = async (
 	chatId: number,
@@ -78,4 +79,25 @@ export const sendTelegramMessage = async (
 		// Don't throw the error - let other commands continue to work
 		// This prevents the entire command handler from failing
 	}
+}
+
+export const sendAdmin = async (
+	message: string,
+	env: Env,
+	ctx?: { props: { debug: boolean } },
+	type: 'debug' | 'deploy' | 'log' = 'debug'
+) => {
+	// Deploy messages are always sent regardless of debug setting
+	if (type === 'deploy') {
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
+		return
+	}
+	
+	// For debug and log types, check if debug is enabled (if ctx is provided)
+	if (ctx && ctx.props.debug === false && type === 'debug') {
+		return // Don't send debug messages if debug is disabled
+	}
+	
+	// Send the message for log type or if debug is enabled
+	await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
 }

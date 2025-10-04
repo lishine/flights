@@ -9,7 +9,7 @@ import {
 } from '../services/flightData'
 import { initializeSchema } from '../schema'
 import { sendFlightAlerts } from './alerts'
-import { sendTelegramMessage } from '../services/telegram'
+import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import type { Env } from '../env'
 import type { Flight, DOProps } from '../types'
 import { getCurrentIdtTime } from '../utils/dateTime'
@@ -22,22 +22,21 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 
 		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
-		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Fetched ${currentFlights.length} current flights`, env, false)
+		await sendAdmin(`🔍 [JOB-${jobId}] Fetched ${currentFlights.length} current flights`, env, ctx)
 
 		writeStatusData(ctx, currentFlights.length)
 
 		const previousFlights = getCurrentFlightsFromStatus(ctx)
-		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Retrieved ${previousFlights.length} previous flights`, env, false)
+		await sendAdmin(`🔍 [JOB-${jobId}] Retrieved ${previousFlights.length} previous flights`, env, ctx)
 
 		// 2. Store current flights as JSON (single SQLite write!)
 		storeFlightsInStatus(currentFlights, ctx)
-		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Stored current flights to status`, env, false)
+		await sendAdmin(`🔍 [JOB-${jobId}] Stored current flights to status`, env, ctx)
 
-		await sendTelegramMessage(
-			parseInt(env.ADMIN_CHAT_ID),
+		await sendAdmin(
 			`🔍 [JOB-${jobId}] Comparing ${currentFlights.length} current flights with ${previousFlights.length} previous flights`,
 			env,
-			false
+			ctx
 		)
 
 		// 3. Get subscribed flight IDs to filter change detection
@@ -76,12 +75,12 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 			for (const [flightId, change] of Object.entries(changesByFlight)) {
 				changeMessage += `• Flight ${flightId}: ${change.changes.join(', ')}\n`
 			}
-			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), changeMessage, env, false)
+			await sendAdmin(changeMessage, env, ctx)
 			
 			await sendFlightAlerts(changesByFlight, env, ctx)
-			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Alerts sent for ${Object.keys(changesByFlight).length} flights`, env, false)
+			await sendAdmin(`🔍 [JOB-${jobId}] Alerts sent for ${Object.keys(changesByFlight).length} flights`, env, ctx)
 		} else {
-			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] No changes detected`, env, false)
+			await sendAdmin(`🔍 [JOB-${jobId}] No changes detected`, env, ctx)
 		}
 
 		// Clean up completed flights every 10 minutes
@@ -102,10 +101,10 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 			)
 		}
 
-		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `✅ [JOB-${jobId}] Job completed successfully`, env, false)
+		await sendAdmin(`✅ [JOB-${jobId}] Job completed successfully`, env, ctx, 'log')
 		return new Response('Cron job completed')
 	} catch (error) {
-		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `❌ [JOB-${jobId}] Cron job failed: ${error instanceof Error ? error.message : 'Unknown error'}`, env, false)
+		await sendAdmin(`❌ [JOB-${jobId}] Cron job failed: ${error instanceof Error ? error.message : 'Unknown error'}`, env, ctx, 'log')
 		writeErrorStatus(ctx, error instanceof Error ? error : 'Unknown error')
 		return new Response('Cron job failed', { status: 500 })
 	}

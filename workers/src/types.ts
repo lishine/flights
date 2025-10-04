@@ -42,4 +42,5 @@ export interface DOProps {
 		idtTimeString?: string
 		flights?: Flight[]
 	}
+	debug: boolean
 }
