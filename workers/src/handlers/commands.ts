@@ -280,6 +280,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			}
 		} else if (data === 'show_suggestions') {
 			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
+			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID),`eligible flights length: ${eligibleFlights.length}`,env, false)
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 15))
 			responseText = `🎯 *Flight Suggestions*\n\n${text}`
 			replyMarkup = {
