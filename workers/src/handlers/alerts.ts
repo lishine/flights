@@ -7,14 +7,9 @@ export const sendFlightAlerts = async (
 	env: Env,
 	ctx: DurableObjectState<DOProps>
 ) => {
-	const alertId = Math.random().toString(36).substring(7)
-	
-	const subsResult = ctx.storage.sql.exec(
-		'SELECT flight_id, telegram_id FROM subscriptions'
-	)
+	const subsResult = ctx.storage.sql.exec('SELECT flight_id, telegram_id FROM subscriptions')
 	const allSubs = subsResult.toArray() as { flight_id: string; telegram_id: string }[]
-	
-	// Check for duplicate subscriptions
+
 	const subscriptionMap = new Map<string, Set<string>>()
 	for (const sub of allSubs) {
 		if (!subscriptionMap.has(sub.flight_id)) {
@@ -22,22 +17,16 @@ export const sendFlightAlerts = async (
 		}
 		subscriptionMap.get(sub.flight_id)!.add(sub.telegram_id)
 	}
-	
+
 	let duplicateCount = 0
 	const duplicates: string[] = []
 	for (const [flightId, subscribers] of subscriptionMap) {
-		const subs = allSubs.filter(s => s.flight_id === flightId)
+		const subs = allSubs.filter((s) => s.flight_id === flightId)
 		if (subs.length !== subscribers.size) {
 			duplicateCount += subs.length - subscribers.size
 			duplicates.push(flightId)
 		}
 	}
-	
-	await sendAdmin(
-		`🚨 [ALERT-${alertId}] Starting to send flight alerts for ${Object.keys(changesByFlight).length} flights\nFound ${allSubs.length} total subscriptions${duplicateCount > 0 ? ` (${duplicateCount} duplicates for flights: ${duplicates.join(', ')})` : ''}`,
-		env,
-		ctx
-	)
 
 	const trackingMap: Record<string, string[]> = {} // flight_id -> users
 
@@ -51,31 +40,11 @@ export const sendFlightAlerts = async (
 		const subscribers = trackingMap[flightChange.flight.id]
 
 		if (subscribers && subscribers.length > 0) {
-			await sendAdmin(
-				`🚨 [ALERT-${alertId}] Flight ${flightChange.flight.flight_number} (${flightId}) changes:\n${flightChange.changes.join(', ')}\nSubscribers: ${subscribers.join(', ')}`,
-				env,
-				ctx
-			)
-
-			// Send alerts to all subscribers
 			for (const telegram_id of subscribers) {
 				await sendAlert(Number(telegram_id), flightChange.flight, flightChange.changes, env)
-				await sendAdmin(
-					`📤 [ALERT-${alertId}] Sent alert to user ${telegram_id} for flight ${flightChange.flight.flight_number}`,
-					env,
-					ctx
-				)
 			}
-		} else {
-			await sendAdmin(
-				`⚠️ [ALERT-${alertId}] No subscribers found for flight ${flightChange.flight.flight_number} (${flightId})`,
-				env,
-				ctx
-			)
 		}
 	}
-	
-	await sendAdmin(`✅ [ALERT-${alertId}] Alert sending completed`, env, ctx)
 }
 
 const sendAlert = async (userId: number, flight: Flight, changes: string[], env: Env) => {

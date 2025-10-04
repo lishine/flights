@@ -33,7 +33,7 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 	private resetCache() {
 		Object.assign(this.ctx.props, {
 			cache: {},
-			debug: false
+			debug: false,
 		})
 	}
 
@@ -107,19 +107,8 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 	 */
 	async alarm(): Promise<void> {
 		this.resetCache() // Reset at start of each alarm
-		const alarmId = Math.random().toString(36).substring(7)
 		const currentCount = this.getAlarmCount()
 		const newCount = currentCount + 1
-		
-		// Check if there's already an alarm scheduled (potential race condition)
-		const existingAlarm = await this.ctx.storage.getAlarm()
-		let alarmMessage = `⏰ [ALARM-${alarmId}] Alarm fired! Previous count: ${currentCount}, New count: ${newCount}\nCurrent time: ${new Date().toISOString()}`
-		
-		if (existingAlarm) {
-			alarmMessage += `\n⚠️ WARNING: Existing alarm found at ${new Date(existingAlarm).toISOString()}`
-		}
-		
-		await sendAdmin(alarmMessage, this.env, this.ctx)
 
 		runScheduledJob(this.env, this.ctx)
 
@@ -127,11 +116,8 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 
 		const period = CRON_PERIOD_SECONDS * 1000
 		const nextAlarmTime = Date.now() + period
-		await sendAdmin(`⏰ [ALARM-${alarmId}] Setting next alarm for ${period}ms from now (${new Date(nextAlarmTime).toISOString()})`, this.env, this.ctx)
 		await this.ctx.storage.setAlarm(nextAlarmTime)
-		await sendAdmin(`✅ [ALARM-${alarmId}] Alarm completed`, this.env, this.ctx)
 	}
-
 
 	/**
 	 * Example method using SQLite-backed SQL API (official API)

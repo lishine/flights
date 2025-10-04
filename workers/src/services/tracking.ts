@@ -13,7 +13,6 @@ export const untrackFlight = (userId: number, flightId: string, env: Env, ctx: D
 	ctx.storage.sql.exec('DELETE FROM subscriptions WHERE telegram_id = ? AND flight_id = ?', userId, flightId)
 }
 
-// Immediately clean up all subscriptions for a specific flight (used when flight is completed)
 export const cleanupFlightSubscriptions = (flightId: string, env: Env, ctx: DurableObjectState<DOProps>) => {
 	ctx.storage.sql.exec('DELETE FROM subscriptions WHERE flight_id = ?', flightId)
 }

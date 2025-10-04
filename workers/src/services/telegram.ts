@@ -75,9 +75,6 @@ export const sendTelegramMessage = async (
 				timestamp: getCurrentIdtTimeNoCache().toISOString(),
 			})
 		}
-
-		// Don't throw the error - let other commands continue to work
-		// This prevents the entire command handler from failing
 	}
 }
 
@@ -87,18 +84,14 @@ export const sendAdmin = async (
 	ctx: { props: { debug: boolean } },
 	type: 'debug' | 'deploy' | 'log' = 'debug'
 ) => {
-	// Deploy messages are always sent regardless of debug setting
 	if (type === 'deploy') {
 		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
 		return
 	}
-	
-	// For debug and log types, check if debug is enabled
-	// Don't send debug messages if debug is disabled
+
 	if (type === 'debug' && !ctx.props.debug) {
 		return
 	}
-	
-	// Send the message for log type or if debug is enabled
+
 	await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
 }

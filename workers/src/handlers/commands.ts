@@ -23,7 +23,6 @@ export const isTextMessage = (message: Message) => {
 	return 'text' in message
 }
 
-// Shared function to build status message - eliminates code duplication
 const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) => {
 	const version = (await env.METADATA.get('version')) || 'Unknown'
 	const lastDeployDate = (await env.METADATA.get('last_deploy_date')) || 'Unknown'
@@ -82,7 +81,6 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 	if ('callback_query' in update && update.callback_query) {
 		const callbackQuery = update.callback_query
 		if (!callbackQuery.message) {
-			// Try to answer the callback query but handle the case where the message is too old
 			try {
 				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 					method: 'POST',
@@ -329,19 +327,9 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				],
 			}
 		} else if (data === 'show_suggestions') {
-			// Reset pagination cursor when showing suggestions fresh
 			ctx.storage.kv.put(`pagination_cursor_${chatId}`, '0')
 
 			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
-
-			// SEND DEBUG MESSAGE TO YOUR CHAT
-			//await sendAdmin(
-			//	`🐛 DEBUG INFO:\n` +
-			//	`Total eligible flights: ${eligibleFlights.length}\n` +
-			//`Will show Next button: ${eligibleFlights.length > 5 ? '✅ YES' : '❌ NO'}\n` +
-			//`Showing flights: 1-${Math.min(5, eligibleFlights.length)}`,
-			//env
-			//)
 
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 				eligibleFlights.slice(0, 5),
