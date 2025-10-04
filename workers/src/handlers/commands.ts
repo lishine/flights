@@ -286,7 +286,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			
 			// SEND DEBUG MESSAGE TO YOUR CHAT
 			await sendTelegramMessage(
-				chatId,
+				parseInt(env.ADMIN_CHAT_ID),
 				`🐛 DEBUG INFO:\n` +
 				`Total eligible flights: ${eligibleFlights.length}\n` +
 				`Will show Next button: ${eligibleFlights.length > 5 ? '✅ YES' : '❌ NO'}\n` +
