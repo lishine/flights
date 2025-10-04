@@ -1,33 +1,51 @@
-let cachedIsraelTime: Date | null = null
+import { DOProps } from '../types'
 
-export const getCurrentIdtTime = () => {
-	if (cachedIsraelTime) {
-		return cachedIsraelTime
+export const getCurrentIdtTime = (ctx: DurableObjectState<DOProps>) => {
+	const cache = ctx.props.cache
+
+	if (cache.idt) {
+		return cache.idt
 	}
 
 	const now = new Date()
-	const israelTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
-	cachedIsraelTime = israelTime
+	const idt = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
+	cache.idt = idt
 
-	return cachedIsraelTime
+	return idt
 }
 
-export const getCurrentIdtDateString = () => {
+export const getCurrentIdtDateString = (ctx: DurableObjectState<DOProps>) => {
+	const cache = ctx.props.cache
+
+	if (cache.idtDateString) {
+		return cache.idtDateString
+	}
+
 	const now = new Date()
-	return now.toLocaleString('en-US', {
+	cache.idtDateString = now.toLocaleString('en-US', {
 		timeZone: 'Asia/Jerusalem',
 		hour12: false,
 	})
+
+	return cache.idtDateString
 }
 
-export const getCurrentIdtTimeString = () => {
+export const getCurrentIdtTimeString = (ctx: DurableObjectState<DOProps>) => {
+	const cache = ctx.props.cache
+
+	if (cache.idtTimeString) {
+		return cache.idtTimeString
+	}
+
 	const now = new Date()
-	return now.toLocaleTimeString('en-US', {
+	cache.idtTimeString = now.toLocaleTimeString('en-US', {
 		timeZone: 'Asia/Jerusalem',
 		hour12: false,
 		hour: '2-digit',
 		minute: '2-digit',
 	})
+
+	return cache.idtTimeString
 }
 
 export const getIdtDateString = (n: number) => {
@@ -41,15 +59,31 @@ export const getIdtTimeString = (n: number) => {
 	return new Date(n).toLocaleTimeString('en-US', {
 		timeZone: 'Asia/Jerusalem',
 		hour12: false,
+		hour: '2-digit',
+		minute: '2-digit'
 	})
 }
 
-export const formatTimeAgo = (timestamp: number): string => {
+// Non-cached versions for use outside Durable Object context
+export const getCurrentIdtTimeNoCache = () => {
+	const now = new Date()
+	return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
+}
+
+export const getCurrentIdtDateStringNoCache = () => {
+	const now = new Date()
+	return now.toLocaleString('en-US', {
+		timeZone: 'Asia/Jerusalem',
+		hour12: false,
+	})
+}
+
+export const formatTimeAgo = (timestamp: number, ctx: DurableObjectState<DOProps>): string => {
 	if (!timestamp || timestamp === 0) {
 		return '- not updated'
 	}
 
-	const now = getCurrentIdtTime().getTime()
+	const now = getCurrentIdtTime(ctx).getTime()
 	const diffMs = now - timestamp
 	const diffMinutes = Math.floor(diffMs / 60000)
 

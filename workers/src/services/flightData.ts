@@ -2,7 +2,7 @@ import { getCurrentIdtTime, getIdtTimeString } from '../utils/dateTime'
 import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Env } from '../env'
-import type { Flight, VercelApiResponse, VercelFlightResponse } from '../types'
+import type { Flight, VercelApiResponse, VercelFlightResponse, DOProps } from '../types'
 import { sendTelegramMessage } from '../services/telegram'
 
 // Legacy functions - replaced by JSON-based versions
@@ -68,8 +68,8 @@ import { sendTelegramMessage } from '../services/telegram'
 // 	return flight?.id
 // }
 
-export const generateFakeFlights = (): Flight[] => {
-	const now = getCurrentIdtTime()
+export const generateFakeFlights = (ctx: DurableObjectState<DOProps>): Flight[] => {
+	const now = getCurrentIdtTime(ctx)
 	const futureTime1 = new Date(now.getTime() + 2 * 60 * 60 * 1000) // 2 hours from now
 	const futureTime2 = new Date(now.getTime() + 3 * 60 * 60 * 1000) // 3 hours from now
 	const futureTime3 = new Date(now.getTime() + 4 * 60 * 60 * 1000) // 4 hours from now
@@ -130,8 +130,8 @@ export const generateFakeFlights = (): Flight[] => {
  * Clean up subscriptions for completed flights (JSON version)
  * Uses JSON flight data instead of flights table
  */
-export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectState): number => {
-	const nowIdt = getCurrentIdtTime()
+export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectState<DOProps>): number => {
+	const nowIdt = getCurrentIdtTime(ctx)
 	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago
 
 	console.log(`Cleanup: cutoff=${new Date(cutoffTimestamp).toLocaleString()}`)
@@ -254,7 +254,7 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: E
 	return changes
 }
 
-export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState) => {
+export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState<DOProps>) => {
 	const rawApiData = await ofetch<VercelApiResponse>(VERCEL_FLIGHTS_API_URL)
 	console.log('fetched from vercel', rawApiData.Flights.length)
 
@@ -271,8 +271,8 @@ export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState) => {
 				eta: flight.eta,
 				city: flight.city,
 				airline: flight.airline,
-				created_at: getCurrentIdtTime().getTime(),
-				updated_at: getCurrentIdtTime().getTime(),
+				created_at: getCurrentIdtTime(ctx).getTime(),
+				updated_at: getCurrentIdtTime(ctx).getTime(),
 			}
 		})
 	}
@@ -284,8 +284,8 @@ export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState) => {
 	return transformedFlights
 }
 
-export const writeStatusData = (ctx: DurableObjectState, flightCount: number) => {
-	const timestamp = getCurrentIdtTime().getTime().toString() // Store as milliseconds timestamp
+export const writeStatusData = (ctx: DurableObjectState<DOProps>, flightCount: number) => {
+	const timestamp = getCurrentIdtTime(ctx).getTime().toString() // Store as milliseconds timestamp
 
 	// Increment update counter
 	ctx.storage.sql.exec(
@@ -309,8 +309,8 @@ export const writeStatusData = (ctx: DurableObjectState, flightCount: number) =>
 	}
 }
 
-export const writeErrorStatus = (ctx: DurableObjectState, error: Error | string) => {
-	const errorTimestamp = getCurrentIdtTime().toISOString()
+export const writeErrorStatus = (ctx: DurableObjectState<DOProps>, error: Error | string) => {
+	const errorTimestamp = getCurrentIdtTime(ctx).toISOString()
 	const errorMessage = error instanceof Error ? error.message : error
 
 	ctx.storage.sql.exec(
@@ -323,7 +323,7 @@ export const writeErrorStatus = (ctx: DurableObjectState, error: Error | string)
 	)
 }
 
-export const writeFlightsData = (flights: Flight[], ctx: DurableObjectState) => {
+export const writeFlightsData = (flights: Flight[], ctx: DurableObjectState<DOProps>) => {
 	// Use individual INSERT OR REPLACE statements instead of batch for Durable Object SQLite
 	for (const flight of flights) {
 		ctx.storage.sql.exec(
@@ -352,32 +352,33 @@ export const writeFlightsData = (flights: Flight[], ctx: DurableObjectState) => 
 // NEW JSON-BASED FLIGHT DATA FUNCTIONS
 // ==========================================
 
-let flights: Flight[]
-export const getCurrentFlightsFromStatus = (ctx: DurableObjectState): Flight[] => {
-	if (flights) {
-		return flights
+export const getCurrentFlightsFromStatus = (ctx: DurableObjectState<DOProps>): Flight[] => {
+	const cache = ctx.props.cache
+
+	if (cache.flights) {
+		return cache.flights
 	}
 	const result = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'flights_data')
 	const row = result.toArray()[0] as { value: string } | undefined
 
 	if (!row?.value) {
 		console.log('No previous flight data found in status table')
-		flights = []
+		cache.flights = []
 	} else {
 		try {
-			flights = JSON.parse(row.value) as Flight[]
+			cache.flights = JSON.parse(row.value) as Flight[]
 		} catch (error) {
 			console.error('Failed to parse flights JSON:', error)
-			flights = []
+			cache.flights = []
 		}
 	}
-	return flights
+	return cache.flights
 }
 
 /**
  * Store flights as JSON in status table (single SQLite write!)
  */
-export const storeFlightsInStatus = (flights: Flight[], ctx: DurableObjectState): void => {
+export const storeFlightsInStatus = (flights: Flight[], ctx: DurableObjectState<DOProps>): void => {
 	ctx.storage.sql.exec(
 		'INSERT OR REPLACE INTO status (key, value) VALUES (?, ?)',
 		'flights_data',
@@ -389,7 +390,7 @@ export const storeFlightsInStatus = (flights: Flight[], ctx: DurableObjectState)
 /**
  * Get user's tracked flights from JSON data combined with subscriptions
  */
-export const getUserTrackedFlightsFromStatus = (userId: number, ctx: DurableObjectState): Flight[] => {
+export const getUserTrackedFlightsFromStatus = (userId: number, ctx: DurableObjectState<DOProps>): Flight[] => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
 
 	// Get user's subscribed flight IDs from SQLite
@@ -403,7 +404,7 @@ export const getUserTrackedFlightsFromStatus = (userId: number, ctx: DurableObje
 /**
  * Get flight by ID from JSON data
  */
-export const getFlightByIdFromStatus = (flightId: string, ctx: DurableObjectState): Flight | undefined => {
+export const getFlightByIdFromStatus = (flightId: string, ctx: DurableObjectState<DOProps>): Flight | undefined => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
 	return allFlights.find((flight) => flight.id === flightId)
 }
@@ -411,7 +412,7 @@ export const getFlightByIdFromStatus = (flightId: string, ctx: DurableObjectStat
 /**
  * Get flight by flight number from JSON data
  */
-export const getFlightByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState): Flight | undefined => {
+export const getFlightByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState<DOProps>): Flight | undefined => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
 	return allFlights.find((flight) => flight.flight_number === flightNumber)
 }
@@ -419,7 +420,7 @@ export const getFlightByNumberFromStatus = (flightNumber: string, ctx: DurableOb
 /**
  * Get flights not tracked by user (for suggestions)
  */
-export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjectState): Flight[] => {
+export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjectState<DOProps>): Flight[] => {
 	const allFlights = getCurrentFlightsFromStatus(ctx)
 
 	// Get user's subscribed flight IDs
@@ -436,8 +437,8 @@ export const getNotTrackedFlightsFromStatus = (chatId: number, ctx: DurableObjec
 /**
  * Get flight ID by flight number (prioritizing future flights) from JSON data
  */
-export const getFlightIdByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState): string | undefined => {
-	const nowIdt = getCurrentIdtTime()
+export const getFlightIdByNumberFromStatus = (flightNumber: string, ctx: DurableObjectState<DOProps>): string | undefined => {
+	const nowIdt = getCurrentIdtTime(ctx)
 	const allFlights = getCurrentFlightsFromStatus(ctx)
 
 	// First try to find future flights

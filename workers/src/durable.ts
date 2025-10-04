@@ -5,15 +5,17 @@ import { handleCommand } from './handlers/commands'
 import { resetSchema } from './schema'
 import { CRON_PERIOD_SECONDS } from './utils/constants'
 import { sendTelegramMessage } from './services/telegram'
+import { DOProps } from './types'
 
-export class FlightDO extends DurableObject<Env> {
+export class FlightDO extends DurableObject<Env, DOProps> {
 	private alarmCount: number = 0
 	private instanceStartTime: number = Date.now() // Add this
 	private requestCount: number = 0 // Add this
 
-	constructor(ctx: DurableObjectState, env: Env) {
+	constructor(ctx: DurableObjectState<DOProps>, env: Env) {
 		console.log('constructor')
 		super(ctx, env)
+		this.resetCache()
 
 		ctx.blockConcurrencyWhile(async () => {
 			this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
@@ -28,7 +30,14 @@ export class FlightDO extends DurableObject<Env> {
 		})
 	}
 
+	private resetCache() {
+		Object.assign(this.ctx.props, {
+			cache: {}
+		})
+	}
+
 	async fetch(request: Request): Promise<Response> {
+		this.resetCache() // Reset at start of each request
 		const url = new URL(request.url)
 
 		this.requestCount++ // Increment on every request
@@ -96,6 +105,7 @@ export class FlightDO extends DurableObject<Env> {
 	 * Uses SQLite-backed synchronous KV API for all storage operations
 	 */
 	async alarm(): Promise<void> {
+		this.resetCache() // Reset at start of each alarm
 		const alarmId = Math.random().toString(36).substring(7)
 		const currentCount = this.getAlarmCount()
 		const newCount = currentCount + 1

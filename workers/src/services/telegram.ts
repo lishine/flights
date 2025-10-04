@@ -1,7 +1,7 @@
 import type { Env } from '../env'
 import { $fetch } from 'ofetch'
 import { getTelegramUrl } from '../utils/constants'
-import { getCurrentIdtTime } from '../utils/dateTime'
+import { getCurrentIdtTimeNoCache } from '../utils/dateTime'
 
 export const sendTelegramMessage = async (
 	chatId: number,
@@ -52,7 +52,7 @@ export const sendTelegramMessage = async (
 				textLength: text.length,
 				hasReplyMarkup: !!replyMarkup,
 				textPreview: text.length > 100 ? text.substring(0, 100) + '...' : text,
-				timestamp: getCurrentIdtTime().toISOString(),
+				timestamp: getCurrentIdtTimeNoCache().toISOString(),
 			}
 
 			// Try to extract status code from fetch errors
@@ -71,7 +71,7 @@ export const sendTelegramMessage = async (
 				error,
 				chatId,
 				textLength: text.length,
-				timestamp: getCurrentIdtTime().toISOString(),
+				timestamp: getCurrentIdtTimeNoCache().toISOString(),
 			})
 		}
 

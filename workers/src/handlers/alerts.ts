@@ -1,11 +1,11 @@
 import { sendTelegramMessage } from '../services/telegram'
 import type { Env } from '../env'
-import type { Flight } from '../types'
+import type { Flight, DOProps } from '../types'
 
 export const sendFlightAlerts = async (
 	changesByFlight: Record<string, { flight: Flight; changes: string[] }>,
 	env: Env,
-	ctx: DurableObjectState
+	ctx: DurableObjectState<DOProps>
 ) => {
 	const alertId = Math.random().toString(36).substring(7)
 	

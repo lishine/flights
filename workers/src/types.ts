@@ -34,3 +34,12 @@ export interface InlineKeyboardButton {
 export interface InlineKeyboardMarkup {
 	inline_keyboard: InlineKeyboardButton[][]
 }
+
+export interface DOProps {
+	cache: {
+		idt?: Date
+		idtDateString?: string
+		idtTimeString?: string
+		flights?: Flight[]
+	}
+}

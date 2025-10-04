@@ -1,7 +1,7 @@
 import { getUserTrackedFlightsFromStatus } from '../services/flightData'
 import { getCurrentIdtTime } from './dateTime'
 import type { Env } from '../env'
-import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup } from '../types'
+import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup, DOProps } from '../types'
 
 // Helper function to format time from timestamp
 export const formatTimeFromTimestamp = (timestamp: number) => {
@@ -14,9 +14,9 @@ export const formatTimeFromTimestamp = (timestamp: number) => {
 }
 
 // Helper function to get day label from timestamp
-export const getDayLabelFromTimestamp = (timestamp: number) => {
+export const getDayLabelFromTimestamp = (timestamp: number, ctx: DurableObjectState<DOProps>) => {
 	const date = new Date(timestamp)
-	const todayIdt = getCurrentIdtTime()
+	const todayIdt = getCurrentIdtTime(ctx)
 	const tomorrowIdt = new Date(todayIdt)
 	tomorrowIdt.setDate(tomorrowIdt.getDate() + 1)
 
@@ -47,7 +47,7 @@ export const formatTrackingList = async (userFlights: string[], env: Env) => {
 export const formatTrackingListOptimized = (
 	chatId: number,
 	env: Env,
-	ctx: DurableObjectState
+	ctx: DurableObjectState<DOProps>
 ): { text: string; replyMarkup: InlineKeyboardMarkup | null } => {
 	const flights = getUserTrackedFlightsFromStatus(chatId, ctx)
 
@@ -66,7 +66,7 @@ export const formatTrackingListOptimized = (
 
 		if (flight.eta) {
 			formattedTime = formatTimeFromTimestamp(flight.eta)
-			dayLabel = getDayLabelFromTimestamp(flight.eta)
+			dayLabel = getDayLabelFromTimestamp(flight.eta, ctx)
 		}
 
 		message += `🛩️ *${escapeMarkdown(flightNum)}*\n`
@@ -115,7 +115,7 @@ export const escapeMarkdown = (text: string) => {
 		.replace(/~/g, '\\~') // Escape tildes
 }
 
-export const formatFlightSuggestions = (flights: Flight[], currentPage: number = 0, totalFlights: number = 0) => {
+export const formatFlightSuggestions = (flights: Flight[], currentPage: number = 0, totalFlights: number = 0, ctx?: DurableObjectState<DOProps>) => {
 	if (flights.length === 0) {
 		return {
 			text: 'No flights available for tracking right now (need 1+ hour until arrival).',
@@ -141,7 +141,7 @@ export const formatFlightSuggestions = (flights: Flight[], currentPage: number =
 
 		if (flight.eta) {
 			formattedTime = formatTimeFromTimestamp(flight.eta)
-			dayLabel = getDayLabelFromTimestamp(flight.eta)
+			dayLabel = getDayLabelFromTimestamp(flight.eta, ctx!)
 		}
 
 		const globalIndex = startFlightNumber + index - 1

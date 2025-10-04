@@ -11,10 +11,10 @@ import { initializeSchema } from '../schema'
 import { sendFlightAlerts } from './alerts'
 import { sendTelegramMessage } from '../services/telegram'
 import type { Env } from '../env'
-import type { Flight } from '../types'
+import type { Flight, DOProps } from '../types'
 import { getCurrentIdtTime } from '../utils/dateTime'
 
-export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
+export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>) => {
 	const jobId = Math.random().toString(36).substring(7)
 	
 	try {
@@ -88,7 +88,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 		const lastCleanupResult = ctx.storage.sql.exec("SELECT value FROM status WHERE key = 'last_cleanup_time'")
 		const lastCleanupRow = lastCleanupResult.toArray()[0] as { value: string } | undefined
 		const lastCleanupTime = lastCleanupRow ? parseInt(lastCleanupRow.value) : 0
-		const now = getCurrentIdtTime().getTime()
+		const now = getCurrentIdtTime(ctx).getTime()
 		const tenMinutes = 10 * 60 * 1000
 
 		if (now - lastCleanupTime >= tenMinutes) {

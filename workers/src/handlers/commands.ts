@@ -7,6 +7,7 @@ import { isValidFlightCode } from '../utils/validation'
 import { CRON_PERIOD_SECONDS, getTelegramUrl } from '../utils/constants'
 import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
+import type { DOProps } from '../types'
 import { ofetch } from 'ofetch'
 
 export const isDataQuery = (query: CallbackQuery) => {
@@ -18,7 +19,7 @@ export const isTextMessage = (message: Message) => {
 }
 
 // Shared function to build status message - eliminates code duplication
-const buildStatusMessage = async (env: Env, ctx: DurableObjectState) => {
+const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) => {
 	const version = await env.METADATA.get('version') || 'Unknown'
 	const lastDeployDate = await env.METADATA.get('last_deploy_date') || 'Unknown'
 	
@@ -40,7 +41,7 @@ const buildStatusMessage = async (env: Env, ctx: DurableObjectState) => {
 	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
 	if (lastUpdated?.value && timestamp > 0) {
 		const lastUpdate = formatTimestampForDisplay(timestamp)
-		const timeAgo = formatTimeAgo(timestamp)
+		const timeAgo = formatTimeAgo(timestamp, ctx)
 		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
 		const flightsCount = dataLength?.value ? parseInt(dataLength.value) || 0 : 0
 
@@ -70,7 +71,7 @@ const buildStatusMessage = async (env: Env, ctx: DurableObjectState) => {
 	return responseText
 }
 
-export const handleCommand = async (request: Request, env: Env, ctx: DurableObjectState) => {
+export const handleCommand = async (request: Request, env: Env, ctx: DurableObjectState<DOProps>) => {
 	const update = await request.json<Update>()
 
 	if ('callback_query' in update && update.callback_query) {
@@ -295,7 +296,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				//false
 			//)
 			
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length)
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length, ctx)
 			
 			// Build navigation buttons
 			const navigationButtons = [
@@ -338,7 +339,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			// Update cursor in storage
 			ctx.storage.kv.put(`pagination_cursor_${chatId}`, page.toString())
 			
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(pageFlights, page, eligibleFlights.length)
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(pageFlights, page, eligibleFlights.length, ctx)
 			responseText = `🎯 *Flight Suggestions*\n\n${text}`
 			
 			// Build navigation buttons
@@ -453,7 +454,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 	return new Response('OK')
 }
 
-const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableObjectState) => {
+const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableObjectState<DOProps>) => {
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
 	for (const code of flightCodes) {
@@ -472,12 +473,12 @@ const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableO
 	await sendTelegramMessage(chatId, results.join('\n'), env)
 }
 
-const handleUntrack = async (chatId: number, flightId: string, env: Env, ctx: DurableObjectState) => {
+const handleUntrack = async (chatId: number, flightId: string, env: Env, ctx: DurableObjectState<DOProps>) => {
 	// Remove the flight from tracking using the untrackFlight function
 	untrackFlight(chatId, flightId, env, ctx)
 }
 
-const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectState) => {
+const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
 	const clearedCount = clearUserTracking(chatId, env, ctx)
 	const message =
 		clearedCount > 0
@@ -486,14 +487,14 @@ const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectSt
 	await sendTelegramMessage(chatId, message, env)
 }
 
-const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState) => {
+const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
 	const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
 
-	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length)
+	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length, ctx)
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
 }
 
-const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) => {
+const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
 	// Build the main status message
 	const responseText = await buildStatusMessage(env, ctx)
 
@@ -507,10 +508,10 @@ const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState) =
 	await sendTelegramMessage(chatId, responseText, env, false, { inline_keyboard: inlineKeyboard })
 }
 
-const handleTestData = async (chatId: number, env: Env, ctx: DurableObjectState) => {
-	try {
+const handleTestData = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
+		try {
 		// Generate fake flights
-		const fakeFlights = generateFakeFlights()
+		const fakeFlights = generateFakeFlights(ctx)
 		
 		// Store fake flights using new JSON approach (replaces SQLite storage)
 		storeFlightsInStatus(fakeFlights, ctx)
