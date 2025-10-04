@@ -3,7 +3,7 @@ import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Env } from '../env'
 import type { Flight, VercelApiResponse, VercelFlightResponse, DOProps } from '../types'
-import { sendTelegramMessage } from '../services/telegram'
+import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 
 // Legacy functions - replaced by JSON-based versions
 // export const getCurrentFlights = (ctx: DurableObjectState) => {
@@ -176,22 +176,18 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: E
 	const changeId = Math.random().toString(36).substring(7)
 	
 	if (env) {
-		sendTelegramMessage(
-			parseInt(env.ADMIN_CHAT_ID),
+		sendAdmin(
 			`🔍 [CHANGE-${changeId}] Detecting changes for flight ${currentFlight.flight_number} (${currentFlight.id})`,
-			env,
-			false
+			env
 		)
 	}
 	
 	if (prevFlight.status !== currentFlight.status) {
 		changes.push(`📍 Status: ${currentFlight.status}`)
 		if (env) {
-			sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			sendAdmin(
 				`🔍 [CHANGE-${changeId}] Status change: ${prevFlight.status} -> ${currentFlight.status}`,
-				env,
-				false
+				env
 			)
 		}
 	}
@@ -202,51 +198,41 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: E
 		const currentTime = currentDt ?? 'TBA'
 		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
 		if (env) {
-			sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			sendAdmin(
 				`🔍 [CHANGE-${changeId}] ETA change: ${prevTime} -> ${currentTime}`,
-				env,
-				false
+				env
 			)
 		}
 	}
 	if (prevFlight.city !== currentFlight.city) {
 		changes.push(`🏙️ City: ${currentFlight.city || 'Unknown'}`)
 		if (env) {
-			sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			sendAdmin(
 				`🔍 [CHANGE-${changeId}] City change: ${prevFlight.city} -> ${currentFlight.city}`,
-				env,
-				false
+				env
 			)
 		}
 	}
 	if (prevFlight.airline !== currentFlight.airline) {
 		changes.push(`✈️ Airline: ${currentFlight.airline || 'Unknown'}`)
 		if (env) {
-			sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			sendAdmin(
 				`🔍 [CHANGE-${changeId}] Airline change: ${prevFlight.airline} -> ${currentFlight.airline}`,
-				env,
-				false
+				env
 			)
 		}
 	}
 	
 	if (env) {
 		if (changes.length === 0) {
-			sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			sendAdmin(
 				`🔍 [CHANGE-${changeId}] No changes detected for flight ${currentFlight.flight_number}`,
-				env,
-				false
+				env
 			)
 		} else {
-			sendTelegramMessage(
-				parseInt(env.ADMIN_CHAT_ID),
+			sendAdmin(
 				`🔍 [CHANGE-${changeId}] Total changes: ${changes.length}`,
-				env,
-				false
+				env
 			)
 		}
 	}
@@ -258,7 +244,7 @@ export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState<DOPro
 	const rawApiData = await ofetch<VercelApiResponse>(VERCEL_FLIGHTS_API_URL)
 	console.log('fetched from vercel', rawApiData.Flights.length)
 
-   // await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID),getIdtTimeString(rawApiData.updated) , env, false)
+   // await sendAdmin(getIdtTimeString(rawApiData.updated), env)
 	const filterAndTransformFlights = (rawFlights: VercelFlightResponse[]) => {
 		return rawFlights.map((flight) => {
 			const flightId = `${flight.fln}_${flight.sta}`

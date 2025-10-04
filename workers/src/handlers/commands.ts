@@ -1,4 +1,4 @@
-import { sendTelegramMessage } from '../services/telegram'
+import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
 import { getFlightIdByNumberFromStatus, getNotTrackedFlightsFromStatus, generateFakeFlights, storeFlightsInStatus } from '../services/flightData'
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
@@ -286,14 +286,12 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
 			
 			// SEND DEBUG MESSAGE TO YOUR CHAT
-			//await sendTelegramMessage(
-				//parseInt(env.ADMIN_CHAT_ID),
+			//await sendAdmin(
 			//	`🐛 DEBUG INFO:\n` +
 			//	`Total eligible flights: ${eligibleFlights.length}\n` +
 				//`Will show Next button: ${eligibleFlights.length > 5 ? '✅ YES' : '❌ NO'}\n` +
 				//`Showing flights: 1-${Math.min(5, eligibleFlights.length)}`,
-				//env,
-				//false
+				//env
 			//)
 			
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length, ctx)
