@@ -166,7 +166,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			// ✅ Now behave like pressing "Next"
 			// get current pagination cursor
 			const cursorKey = `pagination_cursor_${chatId}`
-			const cursorStr = (await ctx.storage.kv.get<string>(cursorKey)) || '0'
+			const cursorStr = ctx.storage.kv.get<string>(cursorKey) || '0'
 			const currentPage = parseInt(cursorStr) || 0
 			const nextPage = currentPage + 1
 
@@ -175,8 +175,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			const endIndex = startIndex + 5
 			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
 
-			// update cursor
-			await ctx.storage.kv.put(cursorKey, nextPage.toString())
+			ctx.storage.kv.put(cursorKey, nextPage.toString())
 
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 				pageFlights,
@@ -315,19 +314,19 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				inline_keyboard: [
 					[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
 					[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
-					[{ text: '🔄 Refresh Status', callback_data: 'get_status' }],
 				],
 			}
 		} else if (data === 'show_tracked') {
 			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
 			responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
 			// Combine the untrack buttons with navigation buttons
-			const navigationButtons = [
-				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
-				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-			]
+			const navigationButtons = [[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }]]
 			replyMarkup = {
-				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
+				inline_keyboard: [
+					...(trackedMarkup?.inline_keyboard || []),
+					...navigationButtons,
+					[{ text: '🗑️ Untrack All', callback_data: 'untrack_all' }],
+				],
 			}
 		} else if (data === 'show_suggestions') {
 			// Reset pagination cursor when showing suggestions fresh
@@ -419,7 +418,48 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			replyMarkup = {
 				inline_keyboard: allButtons,
 			}
+		} else if (data === 'untrack_all') {
+			const clearedCount = clearUserTracking(chatId, env, ctx)
+
+			// Rebuild the tracked flights view after clearing
+			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
+			const responseText =
+				clearedCount > 0
+					? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.\n\n🚨 *Your Tracked Flights*\n\n${trackedMessage}`
+					: 'ℹ️ You had no tracked flights to clear.\n\n🚨 *Your Tracked Flights*\n\n' + trackedMessage
+
+			// Navigation + new Untrack All button
+			const navigationButtons = [[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }]]
+
+			const finalMarkup = {
+				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
+			}
+
+			try {
+				await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						chat_id: chatId,
+						message_id: messageId,
+						text: responseText,
+						parse_mode: 'Markdown',
+						reply_markup: finalMarkup,
+					}),
+				})
+			} catch (error) {
+				console.error('Failed to edit message for untrack_all:', {
+					chatId,
+					messageId,
+					responseText,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
+				})
+			}
+
+			return new Response('OK')
 		}
+
 		try {
 			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
 				method: 'POST',
@@ -548,7 +588,6 @@ const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState<DO
 	const inlineKeyboard = [
 		[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
 		[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
-		[{ text: '🔄 Refresh Status', callback_data: 'get_status' }],
 	]
 
 	await sendTelegramMessage(chatId, responseText, env, false, { inline_keyboard: inlineKeyboard })
