@@ -286,11 +286,26 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID),`eligible flights length: ${eligibleFlights.length}`,env, false)
 			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length)
 			responseText = `🎯 *Flight Suggestions*\n\n${text}`
+			
+			// Build navigation buttons
+			const navigationButtons = [
+				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+			]
+			
+			// Add pagination buttons for initial display
+			const paginationButtons = []
+			
+			// Show Next button only if there are more than 5 flights
+			if (eligibleFlights.length > 5) {
+				paginationButtons.push([{ text: 'Next ➡️', callback_data: 'suggestions_page:1' }])
+			}
+			
 			replyMarkup = {
 				inline_keyboard: [
-					[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-					[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
+					...navigationButtons,
 					...(suggestionsMarkup?.inline_keyboard || []),
+					...paginationButtons,
 				],
 			}
 		} else if (data.startsWith('suggestions_page:')) {
