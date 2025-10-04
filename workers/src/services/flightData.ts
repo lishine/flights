@@ -335,9 +335,9 @@ export const writeFlightsData = (flights: Flight[], ctx: DurableObjectState<DOPr
 export const getCurrentFlightsFromStatus = (ctx: DurableObjectState<DOProps>): Flight[] => {
 	const cache = ctx.props.cache
 
-	// if (cache.flights) {
-	// 	return cache.flights
-	// }
+	if (cache.flights) {
+		return cache.flights
+	}
 	const result = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'flights_data')
 	const row = result.toArray()[0] as { value: string } | undefined
 

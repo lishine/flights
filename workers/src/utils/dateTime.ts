@@ -3,9 +3,9 @@ import { DOProps } from '../types'
 export const getCurrentIdtTime = (ctx: DurableObjectState<DOProps>) => {
 	const cache = ctx.props.cache
 
-	// if (cache.idt) {
-	// 	return cache.idt
-	// }
+	if (cache.idt) {
+		return cache.idt
+	}
 
 	const now = new Date()
 	const idt = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
@@ -17,9 +17,9 @@ export const getCurrentIdtTime = (ctx: DurableObjectState<DOProps>) => {
 export const getCurrentIdtDateString = (ctx: DurableObjectState<DOProps>) => {
 	const cache = ctx.props.cache
 
-	// if (cache.idtDateString) {
-	// 	return cache.idtDateString
-	// }
+	if (cache.idtDateString) {
+		return cache.idtDateString
+	}
 
 	const now = new Date()
 	cache.idtDateString = now.toLocaleString('en-US', {
@@ -33,9 +33,9 @@ export const getCurrentIdtDateString = (ctx: DurableObjectState<DOProps>) => {
 export const getCurrentIdtTimeString = (ctx: DurableObjectState<DOProps>) => {
 	const cache = ctx.props.cache
 
-	// if (cache.idtTimeString) {
-	// 	return cache.idtTimeString
-	// }
+	if (cache.idtTimeString) {
+		return cache.idtTimeString
+	}
 
 	const now = new Date()
 	cache.idtTimeString = now.toLocaleTimeString('en-US', {
