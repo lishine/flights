@@ -171,10 +171,29 @@ export const cleanupCompletedFlightsFromStatus = (env: Env, ctx: DurableObjectSt
 	}
 }
 
-export const detectChanges = (prevFlight: Flight, currentFlight: Flight) => {
+export const detectChanges = (prevFlight: Flight, currentFlight: Flight, env?: Env) => {
 	const changes: string[] = []
+	const changeId = Math.random().toString(36).substring(7)
+	
+	if (env) {
+		sendTelegramMessage(
+			parseInt(env.ADMIN_CHAT_ID),
+			`🔍 [CHANGE-${changeId}] Detecting changes for flight ${currentFlight.flight_number} (${currentFlight.id})`,
+			env,
+			false
+		)
+	}
+	
 	if (prevFlight.status !== currentFlight.status) {
 		changes.push(`📍 Status: ${currentFlight.status}`)
+		if (env) {
+			sendTelegramMessage(
+				parseInt(env.ADMIN_CHAT_ID),
+				`🔍 [CHANGE-${changeId}] Status change: ${prevFlight.status} -> ${currentFlight.status}`,
+				env,
+				false
+			)
+		}
 	}
 	if (prevFlight.eta !== currentFlight.eta) {
 		const prevDt = getIdtTimeString(prevFlight.eta)
@@ -182,13 +201,56 @@ export const detectChanges = (prevFlight: Flight, currentFlight: Flight) => {
 		const prevTime = prevDt ?? 'TBA'
 		const currentTime = currentDt ?? 'TBA'
 		changes.push(`🕒 Arrival Time: ${currentTime} (was ${prevTime})`)
+		if (env) {
+			sendTelegramMessage(
+				parseInt(env.ADMIN_CHAT_ID),
+				`🔍 [CHANGE-${changeId}] ETA change: ${prevTime} -> ${currentTime}`,
+				env,
+				false
+			)
+		}
 	}
 	if (prevFlight.city !== currentFlight.city) {
 		changes.push(`🏙️ City: ${currentFlight.city || 'Unknown'}`)
+		if (env) {
+			sendTelegramMessage(
+				parseInt(env.ADMIN_CHAT_ID),
+				`🔍 [CHANGE-${changeId}] City change: ${prevFlight.city} -> ${currentFlight.city}`,
+				env,
+				false
+			)
+		}
 	}
 	if (prevFlight.airline !== currentFlight.airline) {
 		changes.push(`✈️ Airline: ${currentFlight.airline || 'Unknown'}`)
+		if (env) {
+			sendTelegramMessage(
+				parseInt(env.ADMIN_CHAT_ID),
+				`🔍 [CHANGE-${changeId}] Airline change: ${prevFlight.airline} -> ${currentFlight.airline}`,
+				env,
+				false
+			)
+		}
 	}
+	
+	if (env) {
+		if (changes.length === 0) {
+			sendTelegramMessage(
+				parseInt(env.ADMIN_CHAT_ID),
+				`🔍 [CHANGE-${changeId}] No changes detected for flight ${currentFlight.flight_number}`,
+				env,
+				false
+			)
+		} else {
+			sendTelegramMessage(
+				parseInt(env.ADMIN_CHAT_ID),
+				`🔍 [CHANGE-${changeId}] Total changes: ${changes.length}`,
+				env,
+				false
+			)
+		}
+	}
+	
 	return changes
 }
 

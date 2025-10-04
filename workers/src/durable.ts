@@ -4,6 +4,7 @@ import { runScheduledJob } from './handlers/cron'
 import { handleCommand } from './handlers/commands'
 import { resetSchema } from './schema'
 import { CRON_PERIOD_SECONDS } from './utils/constants'
+import { sendTelegramMessage } from './services/telegram'
 
 export class FlightDO extends DurableObject<Env> {
 	private alarmCount: number = 0
@@ -95,20 +96,38 @@ export class FlightDO extends DurableObject<Env> {
 	 * Uses SQLite-backed synchronous KV API for all storage operations
 	 */
 	async alarm(): Promise<void> {
-		console.log('alarm')
-
-		runScheduledJob(this.env, this.ctx)
-
+		const alarmId = Math.random().toString(36).substring(7)
 		const currentCount = this.getAlarmCount()
 		const newCount = currentCount + 1
+		
+		// Check if there's already an alarm scheduled (potential race condition)
+		const existingAlarm = await this.ctx.storage.getAlarm()
+		let alarmMessage = `⏰ [ALARM-${alarmId}] Alarm fired! Previous count: ${currentCount}, New count: ${newCount}\nCurrent time: ${new Date().toISOString()}`
+		
+		if (existingAlarm) {
+			alarmMessage += `\n⚠️ WARNING: Existing alarm found at ${new Date(existingAlarm).toISOString()}`
+		}
+		
+		await this.sendAdminMessage(alarmMessage)
 
-		console.log(`Alarm fired! Count: ${newCount}`)
+		runScheduledJob(this.env, this.ctx)
 
 		this.setAlarmCount(newCount)
 
 		const period = CRON_PERIOD_SECONDS * 1000
-		console.log(`Setting next alarm for ${period}ms from now`)
-		await this.ctx.storage.setAlarm(Date.now() + period)
+		const nextAlarmTime = Date.now() + period
+		await this.sendAdminMessage(`⏰ [ALARM-${alarmId}] Setting next alarm for ${period}ms from now (${new Date(nextAlarmTime).toISOString()})`)
+		await this.ctx.storage.setAlarm(nextAlarmTime)
+		await this.sendAdminMessage(`✅ [ALARM-${alarmId}] Alarm completed`)
+	}
+
+	// Helper method to send messages to admin
+	private async sendAdminMessage(message: string): Promise<void> {
+		try {
+			await sendTelegramMessage(parseInt(this.env.ADMIN_CHAT_ID), message, this.env, false)
+		} catch (error) {
+			console.error('Failed to send admin message:', error)
+		}
 	}
 
 	/**

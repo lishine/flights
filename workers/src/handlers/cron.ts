@@ -15,21 +15,29 @@ import type { Flight } from '../types'
 import { getCurrentIdtTime } from '../utils/dateTime'
 
 export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
+	const jobId = Math.random().toString(36).substring(7)
+	
 	try {
 		initializeSchema(ctx)
 
 		// Fetch new data from API
 		const currentFlights = await fetchLatestFlights(env, ctx)
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Fetched ${currentFlights.length} current flights`, env, false)
 
 		writeStatusData(ctx, currentFlights.length)
 
 		const previousFlights = getCurrentFlightsFromStatus(ctx)
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Retrieved ${previousFlights.length} previous flights`, env, false)
 
 		// 2. Store current flights as JSON (single SQLite write!)
 		storeFlightsInStatus(currentFlights, ctx)
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Stored current flights to status`, env, false)
 
-		console.log(
-			`Comparing ${currentFlights.length} current flights with ${previousFlights.length} previous flights`
+		await sendTelegramMessage(
+			parseInt(env.ADMIN_CHAT_ID),
+			`🔍 [JOB-${jobId}] Comparing ${currentFlights.length} current flights with ${previousFlights.length} previous flights`,
+			env,
+			false
 		)
 
 		// 3. Get subscribed flight IDs to filter change detection
@@ -55,7 +63,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 			const currentFlight = currentFlightsMap[flightId]
 
 			if (currentFlight) {
-				const changes = detectChanges(prevFlight, currentFlight)
+				const changes = detectChanges(prevFlight, currentFlight, env)
 				if (changes.length > 0) {
 					changesByFlight[flightId] = { flight: currentFlight, changes }
 				}
@@ -64,7 +72,16 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 
 		// Send alerts if there are changes
 		if (Object.keys(changesByFlight).length > 0) {
+			let changeMessage = `🔍 [JOB-${jobId}] Changes detected for ${Object.keys(changesByFlight).length} flights:\n`
+			for (const [flightId, change] of Object.entries(changesByFlight)) {
+				changeMessage += `• Flight ${flightId}: ${change.changes.join(', ')}\n`
+			}
+			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), changeMessage, env, false)
+			
 			await sendFlightAlerts(changesByFlight, env, ctx)
+			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] Alerts sent for ${Object.keys(changesByFlight).length} flights`, env, false)
+		} else {
+			await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `🔍 [JOB-${jobId}] No changes detected`, env, false)
 		}
 
 		// Clean up completed flights every 10 minutes
@@ -85,9 +102,10 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState) => {
 			)
 		}
 
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `✅ [JOB-${jobId}] Job completed successfully`, env, false)
 		return new Response('Cron job completed')
 	} catch (error) {
-		console.error('Cron job failed:', error)
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), `❌ [JOB-${jobId}] Cron job failed: ${error instanceof Error ? error.message : 'Unknown error'}`, env, false)
 		writeErrorStatus(ctx, error instanceof Error ? error : 'Unknown error')
 		return new Response('Cron job failed', { status: 500 })
 	}
