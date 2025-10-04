@@ -1,6 +1,11 @@
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
-import { getFlightIdByNumberFromStatus, getNotTrackedFlightsFromStatus, generateFakeFlights, storeFlightsInStatus } from '../services/flightData'
+import {
+	getFlightIdByNumberFromStatus,
+	getNotTrackedFlightsFromStatus,
+	generateFakeFlights,
+	storeFlightsInStatus,
+} from '../services/flightData'
 import { getCurrentIdtTime, formatTimeAgo, formatTimestampForDisplay } from '../utils/dateTime'
 import { formatTrackingListOptimized, formatFlightSuggestions, escapeMarkdown } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
@@ -9,6 +14,7 @@ import type { Env } from '../env'
 import type { Update, CallbackQuery, Message } from 'typegram'
 import type { DOProps } from '../types'
 import { ofetch } from 'ofetch'
+import { handleShowSuggestions, handleSuggestionsPage } from './suggestion-commands'
 
 export const isDataQuery = (query: CallbackQuery) => {
 	return 'data' in query
@@ -20,9 +26,9 @@ export const isTextMessage = (message: Message) => {
 
 // Shared function to build status message - eliminates code duplication
 const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) => {
-	const version = await env.METADATA.get('version') || 'Unknown'
-	const lastDeployDate = await env.METADATA.get('last_deploy_date') || 'Unknown'
-	
+	const version = (await env.METADATA.get('version')) || 'Unknown'
+	const lastDeployDate = (await env.METADATA.get('last_deploy_date')) || 'Unknown'
+
 	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
 	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
 	const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
@@ -280,95 +286,19 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 			}
 		} else if (data === 'show_suggestions') {
-			// Reset pagination cursor when showing suggestions fresh
-			ctx.storage.kv.put(`pagination_cursor_${chatId}`, '0')
-			
-			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
-			
-			// SEND DEBUG MESSAGE TO YOUR CHAT
-			//await sendAdmin(
-			//	`🐛 DEBUG INFO:\n` +
-			//	`Total eligible flights: ${eligibleFlights.length}\n` +
-				//`Will show Next button: ${eligibleFlights.length > 5 ? '✅ YES' : '❌ NO'}\n` +
-				//`Showing flights: 1-${Math.min(5, eligibleFlights.length)}`,
-				//env
-			//)
-			
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length, ctx)
-			
-			// Build navigation buttons
-			const navigationButtons = [
-				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
-			]
-			
-			// Build pagination buttons - show Next if there are more than 5 flights
-			const paginationRow = []
-			if (eligibleFlights.length > 5) {
-				paginationRow.push({ text: 'Next ➡️', callback_data: 'suggestions_page:1' })
-			}
-			
-			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
-			const allButtons = [
-				...navigationButtons,
-			]
-			
-			if (paginationRow.length > 0) {
-				allButtons.push(paginationRow)
-			}
-			
-			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
-			
-			// Add debug info to the response text
-			const debugInfo = `\n\n🐛 *Debug:* ${eligibleFlights.length} eligible flights, Next button: ${eligibleFlights.length > 5 ? 'YES' : 'NO'}`
-			responseText = `🎯 *Flight Suggestions*\n\n${text}${debugInfo}`
-			
-			replyMarkup = {
-				inline_keyboard: allButtons,
-			}
+			const { responseText: resText, replyMarkup: resMarkup } = await handleShowSuggestions(chatId, env, ctx)
+			responseText = resText
+			replyMarkup = resMarkup
 		} else if (data.startsWith('suggestions_page:')) {
-			// Handle pagination
 			const page = parseInt(data.split(':')[1])
-			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
-			const startIndex = page * 5
-			const endIndex = startIndex + 5
-			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
-			
-			// Update cursor in storage
-			ctx.storage.kv.put(`pagination_cursor_${chatId}`, page.toString())
-			
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(pageFlights, page, eligibleFlights.length, ctx)
-			responseText = `🎯 *Flight Suggestions*\n\n${text}`
-			
-			// Build navigation buttons
-			const navigationButtons = [
-				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-				[{ text: '🔄 Back to Status', callback_data: 'get_status' }],
-			]
-			
-			// Build pagination buttons row
-			const paginationRow = []
-			if (page > 0) {
-				paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${page - 1}` })
-			}
-			if (endIndex < eligibleFlights.length) {
-				paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${page + 1}` })
-			}
-			
-			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
-			const allButtons = [
-				...navigationButtons,
-			]
-			
-			if (paginationRow.length > 0) {
-				allButtons.push(paginationRow)
-			}
-			
-			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
-			
-			replyMarkup = {
-				inline_keyboard: allButtons,
-			}
+			const { responseText: resText, replyMarkup: resMarkup } = await handleSuggestionsPage(
+				chatId,
+				page,
+				env,
+				ctx
+			)
+			responseText = resText
+			replyMarkup = resMarkup
 		}
 		try {
 			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
@@ -435,13 +365,11 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 		const handler =
 			commands[command] ||
 			(async () => {
-				const version = await env.METADATA.get('version') || 'Unknown'
-				const lastDeployDate = await env.METADATA.get('last_deploy_date') || 'Unknown'
+				const version = (await env.METADATA.get('version')) || 'Unknown'
+				const lastDeployDate = (await env.METADATA.get('last_deploy_date')) || 'Unknown'
 				await sendTelegramMessage(
 					chatId,
-					`Unknown command.\n` +
-						`📦 Version: ${version}\n` +
-						`📦 Code updated: ${lastDeployDate}\n`,
+					`Unknown command.\n` + `📦 Version: ${version}\n` + `📦 Code updated: ${lastDeployDate}\n`,
 					env
 				)
 			})
@@ -507,10 +435,10 @@ const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState<DO
 }
 
 const handleTestData = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
-		try {
+	try {
 		// Generate fake flights
 		const fakeFlights = generateFakeFlights(ctx)
-		
+
 		// Store fake flights using new JSON approach (replaces SQLite storage)
 		storeFlightsInStatus(fakeFlights, ctx)
 
