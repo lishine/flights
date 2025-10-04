@@ -23,6 +23,7 @@ export type VercelFlightResponse = {
 
 export type VercelApiResponse = {
 	Flights: VercelFlightResponse[]
+	updated:number
 }
 
 export interface InlineKeyboardButton {

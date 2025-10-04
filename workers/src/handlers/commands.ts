@@ -280,7 +280,7 @@ export const handleCommand = async (request: Request, env: Env, ctx: DurableObje
 			}
 		} else if (data === 'show_suggestions') {
 			const eligibleFlights = getNotTrackedFlightsFromStatus(chatId, ctx)
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5))
+			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 15))
 			responseText = `🎯 *Flight Suggestions*\n\n${text}`
 			replyMarkup = {
 				inline_keyboard: [
