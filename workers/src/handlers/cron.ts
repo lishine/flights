@@ -101,7 +101,7 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 			)
 		}
 
-		await sendAdmin(`✅ [JOB-${jobId}] Job completed successfully`, env, ctx, 'log')
+		await sendAdmin(`✅ [JOB-${jobId}] Job completed successfully`, env, ctx)
 		return new Response('Cron job completed')
 	} catch (error) {
 		await sendAdmin(`❌ [JOB-${jobId}] Cron job failed: ${error instanceof Error ? error.message : 'Unknown error'}`, env, ctx, 'log')
