@@ -3,6 +3,10 @@ main = "dist/worker.js"
 compatibility_date = "2025-09-24"
 observability = { enabled = true }
 
+[vars]
+BOT_TOKEN = ""
+ADMIN_CHAT_TOKEN = ""
+
 [[kv_namespaces]]
 binding = "METADATA"
 id = "61263aff35f94b97805907138f2a0e91"
