@@ -22,8 +22,8 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 			this.bot = new Bot<BotContext>(env.BOT_TOKEN)
 			await this.bot.init()
 			this.bot.use(async (gramCtx, next) => {
-				gramCtx.env = env
-				gramCtx.ctx = ctx
+				gramCtx.env = this.env
+				gramCtx.DOStore = this.ctx
 				await next()
 			})
 			setupBotHandlers(this.bot)

@@ -13,14 +13,14 @@ import { isValidFlightCode } from '../utils/validation'
 import { CRON_PERIOD_SECONDS } from '../utils/constants'
 import type { BotContext, DOProps } from '../types'
 
-const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) => {
-	const version = (await env.METADATA.get('version')) || 'Unknown'
-	const lastDeployDate = (await env.METADATA.get('last_deploy_date')) || 'Unknown'
+const buildStatusMessage = async (ctx: BotContext) => {
+	const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
+	const lastDeployDate = (await ctx.env.METADATA.get('last_deploy_date')) || 'Unknown'
 
-	const lastUpdatedResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
-	const updateCountResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
-	const dataLengthResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
-	const errorResult = ctx.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
+	const lastUpdatedResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
+	const updateCountResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
+	const dataLengthResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
+	const errorResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
 
 	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
 	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
@@ -35,7 +35,7 @@ const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) =>
 	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
 	if (lastUpdated?.value && timestamp > 0) {
 		const lastUpdate = formatTimestampForDisplay(timestamp)
-		const timeAgo = formatTimeAgo(timestamp, ctx)
+		const timeAgo = formatTimeAgo(timestamp, ctx.DOStore)
 		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
 		const flightsCount = dataLength?.value ? parseInt(dataLength.value) || 0 : 0
 
@@ -66,29 +66,26 @@ const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) =>
 }
 
 export const setupBotHandlers = (bot: Bot<BotContext>) => {
-	// Command handlers
 	bot.command('track', async (ctx) => {
-		if (!ctx.chat) return
-		const text = ctx.message?.text || ''
-		await handleTrack(ctx.chat.id, text, ctx.env, ctx.ctx)
+		await handleTrack(ctx)
 	})
 
 	bot.command('clear_tracked', async (ctx) => {
-		await handleClearTracked(ctx.chat.id, ctx.env, ctx.ctx)
+		await handleClearTracked(ctx)
 	})
 
 	bot.command('status', async (ctx) => {
-		await handleStatus(ctx.chat.id, ctx.env, ctx.ctx)
+		await handleStatus(ctx)
 	})
 
 	bot.command('test', async (ctx) => {
-		await handleTestData(ctx.chat.id, ctx.env, ctx.ctx)
+		await handleTestData(ctx)
 	})
 
 	// Callback query handlers
 	bot.callbackQuery('get_status', async (ctx) => {
 		if (!ctx.chat) return
-		const responseText = await buildStatusMessage(ctx.env, ctx.ctx)
+		const responseText = await buildStatusMessage(ctx)
 		const replyMarkup = {
 			inline_keyboard: [
 				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
@@ -108,7 +105,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.chat.id,
 			ctx.env,
-			ctx.ctx
+			ctx.DOStore
 		)
 		const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
 
@@ -130,15 +127,15 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 	bot.callbackQuery('show_suggestions', async (ctx) => {
 		if (!ctx.chat) return
-		ctx.ctx.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, '0')
+		ctx.DOStore.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, '0')
 
-		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.ctx)
+		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
 
 		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 			eligibleFlights.slice(0, 5),
 			0,
 			eligibleFlights.length,
-			ctx.ctx
+			ctx.DOStore
 		)
 
 		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
@@ -162,18 +159,18 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery(/^suggestions_page:\d+$/, async (ctx) => {
 		if (!ctx.chat) return
 		const page = parseInt(ctx.match[1])
-		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.ctx)
+		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
 		const startIndex = page * 5
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
 
-		ctx.ctx.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, page.toString())
+		ctx.DOStore.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, page.toString())
 
 		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 			pageFlights,
 			page,
 			eligibleFlights.length,
-			ctx.ctx
+			ctx.DOStore
 		)
 		const responseText = `🎯 *Flight Suggestions*\n\n${text}`
 
@@ -200,9 +197,9 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		const results = []
 		for (const code of flightCodes) {
 			if (isValidFlightCode(code)) {
-				const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.ctx)
+				const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
 				if (flightId) {
-					addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.ctx)
+					addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
 					results.push(`✓ Now tracking ${code.toUpperCase()}`)
 				} else {
 					results.push(`❌ Flight not found: ${code}`)
@@ -215,22 +212,22 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await ctx.answerCallbackQuery('Tracking flights...')
 
 		const cursorKey = `pagination_cursor_${ctx.chat.id}`
-		const cursorStr = ctx.ctx.storage.kv.get<string>(cursorKey) || '0'
+		const cursorStr = ctx.DOStore.storage.kv.get<string>(cursorKey) || '0'
 		const currentPage = parseInt(cursorStr) || 0
 		const nextPage = currentPage + 1
 
-		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.ctx)
+		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
 		const startIndex = nextPage * 5
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
 
-		ctx.ctx.storage.kv.put(cursorKey, nextPage.toString())
+		ctx.DOStore.storage.kv.put(cursorKey, nextPage.toString())
 
 		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 			pageFlights,
 			nextPage,
 			eligibleFlights.length,
-			ctx.ctx
+			ctx.DOStore
 		)
 
 		let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
@@ -254,20 +251,21 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery(/^track_single:.+$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightNumber = ctx.match[1]
-		await handleTrack(ctx.chat.id, `/track ${flightNumber}`, ctx.env, ctx.ctx)
+		ctx.message = { text: `/track ${flightNumber}` } as any // Mock message for handleTrack
+		await handleTrack(ctx)
 		await ctx.answerCallbackQuery('Tracking flight...')
 	})
 
 	bot.callbackQuery(/^untrack_single:.+$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightId = ctx.match[1]
-		await handleUntrack(ctx.chat.id, flightId, ctx.env, ctx.ctx)
+		await handleUntrack(ctx, flightId)
 		await ctx.answerCallbackQuery('Untracking flight...')
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.chat.id,
 			ctx.env,
-			ctx.ctx
+			ctx.DOStore
 		)
 		const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
 
@@ -287,12 +285,12 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 	bot.callbackQuery('untrack_all', async (ctx) => {
 		if (!ctx.chat) return
-		const clearedCount = clearUserTracking(ctx.chat.id, ctx.env, ctx.ctx)
+		const clearedCount = clearUserTracking(ctx.chat.id, ctx.env, ctx.DOStore)
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.chat.id,
 			ctx.env,
-			ctx.ctx
+			ctx.DOStore
 		)
 		const responseText =
 			clearedCount > 0
@@ -330,14 +328,16 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 }
 
-const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableObjectState<DOProps>) => {
+const handleTrack = async (ctx: BotContext) => {
+	if (!ctx.chat) return
+	const text = ctx.message?.text || ''
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
 	for (const code of flightCodes) {
 		if (isValidFlightCode(code)) {
-			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
+			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
 			if (flightId) {
-				addFlightTracking(chatId, flightId, env, ctx)
+				addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
 				results.push(`✓ Now tracking ${code.toUpperCase()}`)
 			} else {
 				results.push(`❌ Flight not found: ${code}`)
@@ -346,21 +346,23 @@ const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableO
 			results.push(`❌ Invalid flight code: ${code}`)
 		}
 	}
-	await sendTelegramMessage(chatId, results.join('\n'), env)
+	await sendTelegramMessage(ctx.chat.id, results.join('\n'), ctx.env)
 }
 
-const handleUntrack = async (chatId: number, flightId: string, env: Env, ctx: DurableObjectState<DOProps>) => {
+const handleUntrack = async (ctx: BotContext, flightId: string) => {
+	if (!ctx.chat) return
 	// Remove the flight from tracking using the untrackFlight function
-	untrackFlight(chatId, flightId, env, ctx)
+	untrackFlight(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
 }
 
-const handleClearTracked = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
-	const clearedCount = clearUserTracking(chatId, env, ctx)
+const handleClearTracked = async (ctx: BotContext) => {
+	if (!ctx.chat) return
+	const clearedCount = clearUserTracking(ctx.chat.id, ctx.env, ctx.DOStore)
 	const message =
 		clearedCount > 0
 			? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.`
 			: 'ℹ️ You had no tracked flights to clear.'
-	await sendTelegramMessage(chatId, message, env)
+	await sendTelegramMessage(ctx.chat.id, message, ctx.env)
 }
 
 const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
@@ -370,9 +372,10 @@ const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectSt
 	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
 }
 
-const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
+const handleStatus = async (ctx: BotContext) => {
+	if (!ctx.chat) return
 	// Build the main status message
-	const responseText = await buildStatusMessage(env, ctx)
+	const responseText = await buildStatusMessage(ctx)
 
 	// Build inline keyboard with action buttons
 	const inlineKeyboard = [
@@ -380,25 +383,26 @@ const handleStatus = async (chatId: number, env: Env, ctx: DurableObjectState<DO
 		[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
 	]
 
-	await sendTelegramMessage(chatId, responseText, env, false, { inline_keyboard: inlineKeyboard })
+	await sendTelegramMessage(ctx.chat.id, responseText, ctx.env, false, { inline_keyboard: inlineKeyboard })
 }
 
-const handleTestData = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
+const handleTestData = async (ctx: BotContext) => {
+	if (!ctx.chat) return
 	try {
 		// Generate fake flights
-		const fakeFlights = generateFakeFlights(ctx)
+		const fakeFlights = generateFakeFlights(ctx.DOStore)
 
 		// Store fake flights using new JSON approach (replaces SQLite storage)
-		storeFlights(fakeFlights, ctx)
+		storeFlights(fakeFlights, ctx.DOStore)
 
 		await sendTelegramMessage(
-			chatId,
+			ctx.chat.id,
 			`✅ Added ${fakeFlights.length} test flights using JSON storage.\n\n` +
 				`Use /test-tracking to see flight suggestions with the test data.`,
-			env
+			ctx.env
 		)
 	} catch (error) {
 		console.error('Error adding test data:', error)
-		await sendTelegramMessage(chatId, '❌ Failed to add test data. Please try again.', env)
+		await sendTelegramMessage(ctx.chat.id, '❌ Failed to add test data. Please try again.', ctx.env)
 	}
 }

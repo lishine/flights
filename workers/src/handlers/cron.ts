@@ -38,7 +38,6 @@ export const runScheduledJob = async (env: Env, ctx: DurableObjectState<DOProps>
 			currentFlights.filter((f) => subscribedFlightIds.has(f.id)).map((f) => [f.id, f])
 		) as Record<string, Flight>
 
-		// 5. Detect changes (same logic as before)
 		const changesByFlight: Record<string, { flight: Flight; changes: string[] }> = {}
 
 		for (const flightId in previousFlightsMap) {

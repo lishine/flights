@@ -49,5 +49,5 @@ import { Context } from 'grammy'
 
 export type BotContext = Context & {
 	env: Env
-	ctx: DurableObjectState<DOProps>
+	DOStore: DurableObjectState<DOProps>  // renamed from ctx
 }
