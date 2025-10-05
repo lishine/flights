@@ -76,6 +76,7 @@ const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) =>
 }
 
 export const handleCommand = async (request: Request, env: Env, ctx: DurableObjectState<DOProps>) => {
+	console.log("handlecommand")
 	const update = await request.json<Update>()
 
 	if ('callback_query' in update && update.callback_query) {

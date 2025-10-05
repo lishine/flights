@@ -5,7 +5,7 @@ observability = { enabled = true }
 
 [[kv_namespaces]]
 binding = "METADATA"
-id="61263aff35f94b97805907138f2a0e91"
+id = "61263aff35f94b97805907138f2a0e91"
 [[durable_objects.bindings]]
 name = "FLIGHTS_DO"
 class_name = "FlightDO"
