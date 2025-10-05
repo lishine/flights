@@ -250,7 +250,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 	bot.callbackQuery(/^track_single:(.+)$/, async (ctx) => {
 		if (!ctx.chat) return
-		const flightNumber = ctx.match?.[1]
+		const flightNumber = ctx.callbackQuery?.data.match[1]
 
 		if (!flightNumber) {
 			console.error('No flight number found in callback query', {
@@ -262,6 +262,15 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		}
 		await handleTrackSingle(ctx, flightNumber)
 		await ctx.answerCallbackQuery('Tracking flight...')
+	})
+
+	bot.callbackQuery(/^track_single:/, async (ctx) => {
+		if (!ctx.chat) return
+
+		const callbackData = ctx.callbackQuery?.data
+
+		const flightNumber = callbackData.split(':')[1]
+		console.log({ callbackData: callbackData })
 	})
 
 	bot.callbackQuery(/^untrack_single:.+$/, async (ctx) => {
