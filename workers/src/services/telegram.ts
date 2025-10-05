@@ -1,4 +1,3 @@
-import type { Env } from '../env'
 import { Bot } from 'grammy'
 import { getCurrentIdtTimeNoCache } from '../utils/dateTime'
 

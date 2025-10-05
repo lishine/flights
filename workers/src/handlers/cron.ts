@@ -10,7 +10,6 @@ import {
 import { initializeSchema } from '../schema'
 import { sendFlightAlerts } from './alerts'
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
-import type { Env } from '../env'
 import type { Flight, DOProps } from '../types'
 import { getCurrentIdtTime } from '../utils/dateTime'
 

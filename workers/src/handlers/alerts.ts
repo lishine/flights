@@ -1,5 +1,4 @@
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
-import type { Env } from '../env'
 import type { Flight, DOProps } from '../types'
 
 export const sendFlightAlerts = async (

@@ -1,6 +1,5 @@
 import { getUserTrackedFlights } from '../services/flightData'
 import { getCurrentIdtTime } from './dateTime'
-import type { Env } from '../env'
 import type { Flight, InlineKeyboardButton, InlineKeyboardMarkup, DOProps } from '../types'
 
 export const formatTimeFromTimestamp = (timestamp: number) => {

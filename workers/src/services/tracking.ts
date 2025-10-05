@@ -1,4 +1,3 @@
-import type { Env } from '../env'
 import type { DOProps } from '../types'
 
 export const addFlightTracking = (userId: number, flightId: string, env: Env, ctx: DurableObjectState<DOProps>) => {

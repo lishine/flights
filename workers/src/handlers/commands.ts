@@ -11,14 +11,7 @@ import {
 } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
 import { CRON_PERIOD_SECONDS } from '../utils/constants'
-import type { Env } from '../env'
-import type { DOProps } from '../types'
-
-// Extend Context to include our custom properties
-export interface BotContext extends Context {
-	env: Env
-	ctx: DurableObjectState<DOProps>
-}
+import type { BotContext, DOProps } from '../types'
 
 const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) => {
 	const version = (await env.METADATA.get('version')) || 'Unknown'

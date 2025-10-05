@@ -38,3 +38,7 @@ don't try wrangler deploy because it is cf integtation as per above
 
 kv - 1000 writes per day
 sqlite - 100,000 wrties per day
+
+# Acceptance!!
+
+cd workers && npx tsc --noEmit

@@ -1,12 +1,14 @@
 import { DurableObject } from 'cloudflare:workers'
-import { Env } from './env'
+import { Bot } from 'grammy'
 import { runScheduledJob } from './handlers/cron'
+import { setupBotHandlers } from './handlers/commands'
 import { resetSchema } from './schema'
 import { CRON_PERIOD_SECONDS } from './utils/constants'
 import { sendTelegramMessage, sendAdmin } from './services/telegram'
-import { DOProps } from './types'
+import { BotContext, DOProps } from './types'
 
 export class FlightDO extends DurableObject<Env, DOProps> {
+	private bot!: Bot<BotContext>
 	private alarmCount: number = 0
 	private instanceStartTime: number = Date.now() // Add this
 	private requestCount: number = 0 // Add this
@@ -17,6 +19,15 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 		this.resetCache()
 
 		ctx.blockConcurrencyWhile(async () => {
+			this.bot = new Bot<BotContext>(env.BOT_TOKEN)
+			await this.bot.init()
+			this.bot.use(async (gramCtx, next) => {
+				gramCtx.env = env
+				gramCtx.ctx = ctx
+				await next()
+			})
+			setupBotHandlers(this.bot)
+
 			this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
 
 			let currentAlarm = await ctx.storage.getAlarm()
@@ -42,6 +53,17 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 
 		this.requestCount++ // Increment on every request
 
+		if (request.method === 'POST' && url.pathname === '/webhook') {
+			try {
+				const update = (await request.json()) as any
+				await this.bot.handleUpdate(update)
+				return new Response('OK')
+			} catch (error) {
+				console.error('Webhook handling error:', error)
+				return new Response('Error', { status: 500 })
+			}
+		}
+
 		if (url.pathname === '/lifetime') {
 			const uptime = Date.now() - this.instanceStartTime
 			const uptimeMinutes = Math.floor(uptime / 60000)
@@ -56,8 +78,6 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 				{ headers: { 'Content-Type': 'text/plain' } }
 			)
 		}
-
-		// Webhook handling moved to main worker with Grammy
 
 		switch (url.pathname) {
 			case '/reset-schema':

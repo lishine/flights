@@ -23,7 +23,7 @@ export type VercelFlightResponse = {
 
 export type VercelApiResponse = {
 	Flights: VercelFlightResponse[]
-	updated:number
+	updated: number
 }
 
 export interface InlineKeyboardButton {
@@ -43,4 +43,11 @@ export interface DOProps {
 		flights?: Flight[]
 	}
 	debug: boolean
+}
+
+import { Context } from 'grammy'
+
+export type BotContext = Context & {
+	env: Env
+	ctx: DurableObjectState<DOProps>
 }
