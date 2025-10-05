@@ -3,7 +3,7 @@ import { Env } from './env'
 import { sendTelegramMessage, sendAdmin } from './services/telegram'
 import { getCurrentIdtDateStringNoCache, getCurrentIdtTimeNoCache } from './utils/dateTime'
 
-// Export the Durable Object class so the runtime can find it
+// / Export the Durable Object class so the runtime can find it
 export { FlightDO }
 
 export default {
