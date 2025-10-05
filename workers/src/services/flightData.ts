@@ -4,49 +4,6 @@ import { ofetch } from 'ofetch'
 import type { Flight, VercelApiResponse, VercelFlightResponse, DOProps } from '../types'
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { formatTimeFromTimestamp } from '../utils/formatting'
-export const generateFakeFlights = (ctx: DurableObjectState<DOProps>): Flight[] => {
-	const now = getCurrentIdtTime(ctx)
-	const futureTime1 = new Date(now.getTime() + 2 * 60 * 60 * 1000) // 2 hours from now
-	const futureTime2 = new Date(now.getTime() + 3 * 60 * 60 * 1000) // 3 hours from now
-	const futureTime3 = new Date(now.getTime() + 4 * 60 * 60 * 1000) // 4 hours from now
-
-	return [
-		{
-			id: `FAKE_LY001_${futureTime1.getTime()}`,
-			flight_number: 'LY001',
-			status: 'SCHEDULED',
-			sta: futureTime1.getTime(),
-			eta: futureTime1.getTime(),
-			city: 'New York',
-			airline: 'EL AL Israel Airlines',
-			created_at: now.getTime(),
-			updated_at: now.getTime(),
-		},
-		{
-			id: `FAKE_BA456_${futureTime2.getTime()}`,
-			flight_number: 'BA456',
-			status: 'SCHEDULED',
-			sta: futureTime2.getTime(),
-			eta: futureTime2.getTime(),
-			city: 'London',
-			airline: 'British Airways',
-			created_at: now.getTime(),
-			updated_at: now.getTime(),
-		},
-		{
-			id: `FAKE_LH789_${futureTime3.getTime()}`,
-			flight_number: 'LH789',
-			status: 'SCHEDULED',
-			sta: futureTime3.getTime(),
-			eta: futureTime3.getTime(),
-			city: 'Frankfurt',
-			airline: 'Lufthansa',
-			created_at: now.getTime(),
-			updated_at: now.getTime(),
-		},
-	]
-}
-
 export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState<DOProps>): number => {
 	const nowIdt = getCurrentIdtTime(ctx)
 	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago

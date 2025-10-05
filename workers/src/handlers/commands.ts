@@ -1,7 +1,7 @@
 import { Bot, Context } from 'grammy'
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
-import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights, storeFlights } from '../services/flightData'
+import { getFlightIdByNumber, getNotTrackedFlights } from '../services/flightData'
 import {
 	formatTrackingListOptimized,
 	formatFlightSuggestions,
@@ -29,7 +29,6 @@ const buildStatusMessage = async (ctx: BotContext) => {
 
 	const errorData = errorResultRow?.value
 
-	// Build unified status message
 	let statusMessage = '📊 *System Status*\n\n'
 
 	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
@@ -53,7 +52,6 @@ const buildStatusMessage = async (ctx: BotContext) => {
 			`📦 Code updated: ${escapeMarkdown(lastDeployDate)}\n`
 	}
 
-	// Add error information if present
 	if (errorData) {
 		const error = JSON.parse(errorData)
 		const errorTime = new Date(error.timestamp).toLocaleString()
@@ -78,11 +76,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await handleStatus(ctx)
 	})
 
-	bot.command('test', async (ctx) => {
-		await handleTestData(ctx)
-	})
-
-	// Callback query handlers
 	bot.callbackQuery('get_status', async (ctx) => {
 		if (!ctx.chat) return
 		const responseText = await buildStatusMessage(ctx)
@@ -156,7 +149,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await ctx.answerCallbackQuery('🔄 Refreshing...')
 	})
 
-	bot.callbackQuery(/^suggestions_page:\d+$/, async (ctx) => {
+	bot.callbackQuery(/^suggestions_page:(\d+)$/, async (ctx) => {
 		if (!ctx.chat) return
 		const page = parseInt(ctx.match[1])
 		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
@@ -252,14 +245,12 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		if (!ctx.chat) return
 		const flightNumber = ctx.match[1]
 		await handleTrackSingle(ctx, flightNumber)
-		// await ctx.answerCallbackQuery('Tracking flight...')
 	})
 
 	bot.callbackQuery(/^untrack_single:(.+)$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightId = ctx.match[1]
 		await handleUntrack(ctx, flightId)
-		// await ctx.answerCallbackQuery('Untracking flight...')
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.chat.id,
@@ -308,7 +299,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await ctx.answerCallbackQuery('🔄 Refreshing...')
 	})
 
-	// Handle unknown commands
 	bot.on('message:text', async (ctx) => {
 		const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
 		const lastDeployDate = (await ctx.env.METADATA.get('last_deploy_date')) || 'Unknown'
@@ -317,7 +307,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		})
 	})
 
-	// Handle old callback queries
 	bot.callbackQuery(/.*/, async (ctx) => {
 		if (!ctx.callbackQuery.message) {
 			await ctx.answerCallbackQuery({ text: 'This message is too old to interact with', show_alert: true })
@@ -368,7 +357,6 @@ const handleTrackSingle = async (ctx: BotContext, flightNumber: string) => {
 
 const handleUntrack = async (ctx: BotContext, flightId: string) => {
 	if (!ctx.chat) return
-	// Remove the flight from tracking using the untrackFlight function
 	untrackFlight(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
 }
 
@@ -382,44 +370,14 @@ const handleClearTracked = async (ctx: BotContext) => {
 	await sendTelegramMessage(ctx.chat.id, message, ctx.env)
 }
 
-const handleTestTracking = async (chatId: number, env: Env, ctx: DurableObjectState<DOProps>) => {
-	const eligibleFlights = getNotTrackedFlights(chatId, ctx)
-
-	const { text, replyMarkup } = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length, ctx)
-	await sendTelegramMessage(chatId, text, env, false, replyMarkup)
-}
-
 const handleStatus = async (ctx: BotContext) => {
 	if (!ctx.chat) return
-	// Build the main status message
 	const responseText = await buildStatusMessage(ctx)
 
-	// Build inline keyboard with action buttons
 	const inlineKeyboard = [
 		[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
 		[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
 	]
 
 	await sendTelegramMessage(ctx.chat.id, responseText, ctx.env, false, { inline_keyboard: inlineKeyboard })
-}
-
-const handleTestData = async (ctx: BotContext) => {
-	if (!ctx.chat) return
-	try {
-		// Generate fake flights
-		const fakeFlights = generateFakeFlights(ctx.DOStore)
-
-		// Store fake flights using new JSON approach (replaces SQLite storage)
-		storeFlights(fakeFlights, ctx.DOStore)
-
-		await sendTelegramMessage(
-			ctx.chat.id,
-			`✅ Added ${fakeFlights.length} test flights using JSON storage.\n\n` +
-				`Use /test-tracking to see flight suggestions with the test data.`,
-			ctx.env
-		)
-	} catch (error) {
-		console.error('Error adding test data:', error)
-		await sendTelegramMessage(ctx.chat.id, '❌ Failed to add test data. Please try again.', ctx.env)
-	}
 }
