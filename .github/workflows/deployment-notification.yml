@@ -4,7 +4,7 @@ on:
     deployment_status:
 
 jobs:
-    notify-prod:
+    notify:
         runs-on: ubuntu-latest
         if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'production'
         permissions:
@@ -71,75 +71,5 @@ jobs:
               run: |
                   curl -X POST "https://flights.vim55k.workers.dev/deploy-webhook" \
                     -H "Content-Type: application/json" \
-                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.release_url }}\"}" \
-                    -w "\nHTTP Status: %{http_code}\n"
-
-    notify-dev:
-        runs-on: ubuntu-latest
-        if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'dev'
-        permissions:
-            contents: write
-
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-              with:
-                  ref: ${{ github.event.deployment.ref }}
-                  fetch-depth: 0
-
-            - name: Calculate version
-              id: version
-              run: |
-                  COMMIT_COUNT=$(git rev-list --count HEAD)
-                  VERSION="dev-1.0.$COMMIT_COUNT"  # Prefix for dev distinction
-                  UPDATE_DATE=$(date +%Y-%m-%d)
-                  echo "version=$VERSION" >> $GITHUB_OUTPUT
-                  echo "update_date=$UPDATE_DATE" >> $GITHUB_OUTPUT
-                  echo "Calculated version: $VERSION"
-
-            - name: Create Dev Release (Draft)
-              id: create_release
-              env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: |
-                  TAG="dev-v${{ steps.version.outputs.version }}"
-
-                  # Check if tag/release already exists
-                  if gh release view "$TAG" >/dev/null 2>&1; then
-                    echo "Dev release $TAG already exists, skipping creation"
-                    RELEASE_URL=$(gh release view "$TAG" --json url -q .url)
-                  else
-                    # Create draft tag and release for dev
-                    RELEASE_URL=$(gh release create "$TAG" \
-                      --title "Dev Release v${{ steps.version.outputs.version }}" \
-                      --notes "Automated dev deployment from commit ${{ github.sha }}
-
-                  Environment: ${{ github.event.deployment.environment }}" \
-                      --draft | grep -o 'https://github.com[^"]*')  # --draft to keep unpublished
-                  fi
-
-                  echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
-
-            - name: Wait for deployment to be ready
-              run: sleep 10
-
-            - name: Verify deployment is actually working
-              run: |
-                  # Check dev URL
-                  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://flights-dev.vim55k.workers.dev/" || echo "000")
-                  echo "Dev deployment health check HTTP status: $HTTP_STATUS"
-
-                  if [ "$HTTP_STATUS" != "200" ]; then
-                    echo "❌ Dev deployment health check failed (HTTP $HTTP_STATUS)"
-                    echo "Skipping dev deployment notification"
-                    exit 1
-                  else
-                    echo "✅ Dev deployment health check passed"
-                  fi
-
-            - name: Call deploy webhook
-              run: |
-                  curl -X POST "https://flights-dev.vim55k.workers.dev/deploy-webhook" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.release_url }}\"}" \
+                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.html_url }}\"}" \
                     -w "\nHTTP Status: %{http_code}\n"
