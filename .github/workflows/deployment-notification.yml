@@ -1,145 +1,145 @@
 name: Deployment Notification
 
 on:
-  deployment_status:
+    deployment_status:
 
 jobs:
-  notify-prod:
-    runs-on: ubuntu-latest
-    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'production'
-    permissions:
-      contents: write
+    notify-prod:
+        runs-on: ubuntu-latest
+        if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'production'
+        permissions:
+            contents: write
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.deployment.ref }}
-          fetch-depth: 0
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event.deployment.ref }}
+                  fetch-depth: 0
 
-      - name: Calculate version
-        id: version
-        run: |
-          COMMIT_COUNT=$(git rev-list --count HEAD)
-          VERSION="1.0.$COMMIT_COUNT"
-          UPDATE_DATE=$(date +%Y-%m-%d)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "update_date=$UPDATE_DATE" >> $GITHUB_OUTPUT
-          echo "Calculated version: $VERSION"
+            - name: Calculate version
+              id: version
+              run: |
+                  COMMIT_COUNT=$(git rev-list --count HEAD)
+                  VERSION="1.0.$COMMIT_COUNT"
+                  UPDATE_DATE=$(date +%Y-%m-%d)
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "update_date=$UPDATE_DATE" >> $GITHUB_OUTPUT
+                  echo "Calculated version: $VERSION"
 
-      - name: Create Release
-        id: create_release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="v${{ steps.version.outputs.version }}"
-          
-          # Check if tag/release already exists
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists, skipping creation"
-            RELEASE_URL=$(gh release view "$TAG" --json url -q .url)
-          else
-            # Create tag and release
-            RELEASE_URL=$(gh release create "$TAG" \
-              --title "Release v${{ steps.version.outputs.version }}" \
-              --notes "Automated deployment from commit ${{ github.sha }}
+            - name: Create Release
+              id: create_release
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  TAG="v${{ steps.version.outputs.version }}"
 
-Environment: ${{ github.event.deployment.environment }}" \
-              --latest | grep -o 'https://github.com[^"]*')
-          fi
-          
-          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+                  # Check if tag/release already exists
+                  if gh release view "$TAG" >/dev/null 2>&1; then
+                    echo "Release $TAG already exists, skipping creation"
+                    RELEASE_URL=$(gh release view "$TAG" --json url -q .url)
+                  else
+                    # Create tag and release
+                    RELEASE_URL=$(gh release create "$TAG" \
+                      --title "Release v${{ steps.version.outputs.version }}" \
+                      --notes "Automated deployment from commit ${{ github.sha }}
 
-      - name: Wait for deployment to be ready
-        run: sleep 10
+                  Environment: ${{ github.event.deployment.environment }}" \
+                      --latest | grep -o 'https://github.com[^"]*')
+                  fi
 
-      - name: Verify deployment is actually working
-        run: |
-          # Check if the deployed site is actually responding
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://flights.vim55k.workers.dev/" || echo "000")
-          echo "Deployment health check HTTP status: $HTTP_STATUS"
-          
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "❌ Deployment health check failed (HTTP $HTTP_STATUS)"
-            echo "Skipping deployment notification"
-            exit 1
-          else
-            echo "✅ Deployment health check passed"
-          fi
+                  echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
 
-      - name: Call deploy webhook
-        run: |
-            curl -X POST "https://flights.vim55k.workers.dev/deploy-webhook" \
-              -H "Content-Type: application/json" \
-              -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.release_url }}\"}" \
-              -w "\nHTTP Status: %{http_code}\n"
+            - name: Wait for deployment to be ready
+              run: sleep 10
 
-  notify-dev:
-    runs-on: ubuntu-latest
-    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'dev'
-    permissions:
-      contents: write
+            - name: Verify deployment is actually working
+              run: |
+                  # Check if the deployed site is actually responding
+                  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://flights.vim55k.workers.dev/" || echo "000")
+                  echo "Deployment health check HTTP status: $HTTP_STATUS"
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.deployment.ref }}
-          fetch-depth: 0
+                  if [ "$HTTP_STATUS" != "200" ]; then
+                    echo "❌ Deployment health check failed (HTTP $HTTP_STATUS)"
+                    echo "Skipping deployment notification"
+                    exit 1
+                  else
+                    echo "✅ Deployment health check passed"
+                  fi
 
-      - name: Calculate version
-        id: version
-        run: |
-          COMMIT_COUNT=$(git rev-list --count HEAD)
-          VERSION="dev-1.0.$COMMIT_COUNT"  # Prefix for dev distinction
-          UPDATE_DATE=$(date +%Y-%m-%d)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "update_date=$UPDATE_DATE" >> $GITHUB_OUTPUT
-          echo "Calculated version: $VERSION"
+            - name: Call deploy webhook
+              run: |
+                  curl -X POST "https://flights.vim55k.workers.dev/deploy-webhook" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.release_url }}\"}" \
+                    -w "\nHTTP Status: %{http_code}\n"
 
-      - name: Create Dev Release (Draft)
-        id: create_release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="dev-v${{ steps.version.outputs.version }}"
-          
-          # Check if tag/release already exists
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Dev release $TAG already exists, skipping creation"
-            RELEASE_URL=$(gh release view "$TAG" --json url -q .url)
-          else
-            # Create draft tag and release for dev
-            RELEASE_URL=$(gh release create "$TAG" \
-              --title "Dev Release v${{ steps.version.outputs.version }}" \
-              --notes "Automated dev deployment from commit ${{ github.sha }}
+    notify-dev:
+        runs-on: ubuntu-latest
+        if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'dev'
+        permissions:
+            contents: write
 
-Environment: ${{ github.event.deployment.environment }}" \
-              --draft | grep -o 'https://github.com[^"]*')  # --draft to keep unpublished
-          fi
-          
-          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event.deployment.ref }}
+                  fetch-depth: 0
 
-      - name: Wait for deployment to be ready
-        run: sleep 10
+            - name: Calculate version
+              id: version
+              run: |
+                  COMMIT_COUNT=$(git rev-list --count HEAD)
+                  VERSION="dev-1.0.$COMMIT_COUNT"  # Prefix for dev distinction
+                  UPDATE_DATE=$(date +%Y-%m-%d)
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "update_date=$UPDATE_DATE" >> $GITHUB_OUTPUT
+                  echo "Calculated version: $VERSION"
 
-      - name: Verify deployment is actually working
-        run: |
-          # Check dev URL
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://flights-dev.vim55k.workers.dev/" || echo "000")
-          echo "Dev deployment health check HTTP status: $HTTP_STATUS"
-          
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "❌ Dev deployment health check failed (HTTP $HTTP_STATUS)"
-            echo "Skipping dev deployment notification"
-            exit 1
-          else
-            echo "✅ Dev deployment health check passed"
-          fi
+            - name: Create Dev Release (Draft)
+              id: create_release
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  TAG="dev-v${{ steps.version.outputs.version }}"
 
-      - name: Call deploy webhook
-        run: |
-            curl -X POST "https://flights-dev.vim55k.workers.dev/deploy-webhook" \
-              -H "Content-Type: application/json" \
-              -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.release_url }}\"}" \
-              -w "\nHTTP Status: %{http_code}\n"
+                  # Check if tag/release already exists
+                  if gh release view "$TAG" >/dev/null 2>&1; then
+                    echo "Dev release $TAG already exists, skipping creation"
+                    RELEASE_URL=$(gh release view "$TAG" --json url -q .url)
+                  else
+                    # Create draft tag and release for dev
+                    RELEASE_URL=$(gh release create "$TAG" \
+                      --title "Dev Release v${{ steps.version.outputs.version }}" \
+                      --notes "Automated dev deployment from commit ${{ github.sha }}
+
+                  Environment: ${{ github.event.deployment.environment }}" \
+                      --draft | grep -o 'https://github.com[^"]*')  # --draft to keep unpublished
+                  fi
+
+                  echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+
+            - name: Wait for deployment to be ready
+              run: sleep 10
+
+            - name: Verify deployment is actually working
+              run: |
+                  # Check dev URL
+                  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://flights-dev.vim55k.workers.dev/" || echo "000")
+                  echo "Dev deployment health check HTTP status: $HTTP_STATUS"
+
+                  if [ "$HTTP_STATUS" != "200" ]; then
+                    echo "❌ Dev deployment health check failed (HTTP $HTTP_STATUS)"
+                    echo "Skipping dev deployment notification"
+                    exit 1
+                  else
+                    echo "✅ Dev deployment health check passed"
+                  fi
+
+            - name: Call deploy webhook
+              run: |
+                  curl -X POST "https://flights-dev.vim55k.workers.dev/deploy-webhook" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.release_url }}\"}" \
+                    -w "\nHTTP Status: %{http_code}\n"
