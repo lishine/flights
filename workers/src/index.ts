@@ -17,6 +17,9 @@ export default {
 			// Create bot instance with webhook handling
 			const bot = new Bot<BotContext>(env.BOT_TOKEN)
 
+			// Initialize the bot
+			await bot.init()
+
 			// Set up middleware to pass env and ctx to handlers
 			bot.use(async (ctx, next) => {
 				;(ctx as any).env = env
