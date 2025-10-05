@@ -2,7 +2,6 @@ import type { Env } from '../env'
 import { $fetch } from 'ofetch'
 import { getTelegramUrl } from '../utils/constants'
 import { getCurrentIdtTimeNoCache } from '../utils/dateTime'
-import type { DOProps } from '../types'
 
 export const sendTelegramMessage = async (
 	chatId: number,
