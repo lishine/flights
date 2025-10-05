@@ -248,10 +248,9 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		})
 	})
 
-	bot.callbackQuery(/^track_single:.+$/, async (ctx) => {
+	bot.callbackQuery(/^track_single:(.+)$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightNumber = ctx.match?.[1]
-		await sendAdmin(`track_single ${ctx.message} ${flightNumber}`, ctx.env, ctx.DOStore, 'log')
 
 		if (!flightNumber) {
 			console.error('No flight number found in callback query', {
