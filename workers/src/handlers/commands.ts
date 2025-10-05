@@ -191,7 +191,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await ctx.answerCallbackQuery('🔄 Refreshing...')
 	})
 
-	bot.callbackQuery(/^track_suggested:.+$/, async (ctx) => {
+	bot.callbackQuery(/^track_suggested:(.+)$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightCodes = ctx.match[1].split(',')
 		const results = []
@@ -251,24 +251,15 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery(/^track_single:(.+)$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightNumber = ctx.match[1]
-
-		if (!flightNumber) {
-			console.error('No flight number found in callback query', {
-				callbackData: ctx.callbackQuery?.data,
-				match: ctx.match,
-			})
-			await ctx.answerCallbackQuery('Error: No flight number found')
-			return
-		}
 		await handleTrackSingle(ctx, flightNumber)
-		await ctx.answerCallbackQuery('Tracking flight...')
+		// await ctx.answerCallbackQuery('Tracking flight...')
 	})
 
-	bot.callbackQuery(/^untrack_single:.+$/, async (ctx) => {
+	bot.callbackQuery(/^untrack_single:(.+)$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightId = ctx.match[1]
 		await handleUntrack(ctx, flightId)
-		await ctx.answerCallbackQuery('Untracking flight...')
+		// await ctx.answerCallbackQuery('Untracking flight...')
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.chat.id,
