@@ -1,7 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Env } from './env'
 import { runScheduledJob } from './handlers/cron'
-import { handleCommand } from './handlers/commands'
 import { resetSchema } from './schema'
 import { CRON_PERIOD_SECONDS } from './utils/constants'
 import { sendTelegramMessage, sendAdmin } from './services/telegram'
@@ -58,9 +57,7 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 			)
 		}
 
-		if (request.method === 'POST' && url.pathname === '/webhook') {
-			return handleCommand(request, this.env, this.ctx)
-		}
+		// Webhook handling moved to main worker with Grammy
 
 		switch (url.pathname) {
 			case '/reset-schema':

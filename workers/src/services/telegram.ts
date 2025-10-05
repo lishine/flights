@@ -1,7 +1,16 @@
 import type { Env } from '../env'
-import { $fetch } from 'ofetch'
-import { getTelegramUrl } from '../utils/constants'
+import { Bot } from 'grammy'
 import { getCurrentIdtTimeNoCache } from '../utils/dateTime'
+
+// Create a shared bot instance for sending messages
+let botInstance: Bot | null = null
+
+export const getBotInstance = (token: string) => {
+	if (!botInstance) {
+		botInstance = new Bot(token)
+	}
+	return botInstance
+}
 
 export const sendTelegramMessage = async (
 	chatId: number,
@@ -11,37 +20,15 @@ export const sendTelegramMessage = async (
 	replyMarkup?: any
 ) => {
 	try {
-		const payload: any = {
-			chat_id: chatId,
-			text,
-			parse_mode: 'Markdown',
-			disable_notification: disableNotification,
-			disable_web_page_preview: false,
-		}
-		if (replyMarkup) payload.reply_markup = replyMarkup
+		const bot = getBotInstance(env.BOT_TOKEN)
 
 		console.log(`Sending Telegram message to ${chatId}, length: ${text.length}`)
 
-		const result = (await $fetch(`${getTelegramUrl(env)}/sendMessage`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: payload,
-		})) as { ok: boolean; description?: string; error_code?: number }
-
-		if (!result.ok) {
-			console.error('Telegram API returned error:', {
-				ok: result.ok,
-				error_code: result.error_code,
-				description: result.description,
-				chatId,
-				textLength: text.length,
-				hasReplyMarkup: !!replyMarkup,
-				textPreview: text.length > 100 ? text.substring(0, 100) + '...' : text,
-			})
-			throw new Error(
-				`Telegram API error: ${result.description || 'Unknown error'} (code: ${result.error_code || 'N/A'})`
-			)
-		}
+		await bot.api.sendMessage(chatId, text, {
+			parse_mode: 'Markdown',
+			disable_notification: disableNotification,
+			reply_markup: replyMarkup,
+		})
 	} catch (error) {
 		// Enhanced error logging with more details
 		if (error instanceof Error) {
@@ -53,16 +40,6 @@ export const sendTelegramMessage = async (
 				hasReplyMarkup: !!replyMarkup,
 				textPreview: text.length > 100 ? text.substring(0, 100) + '...' : text,
 				timestamp: getCurrentIdtTimeNoCache().toISOString(),
-			}
-
-			// Try to extract status code from fetch errors
-			if ('status' in error) {
-				errorDetails.status = (error as any).status
-			}
-
-			// Try to extract response text if available
-			if ('data' in error) {
-				errorDetails.responseData = (error as any).data
 			}
 
 			console.error('Failed to send Telegram message:', errorDetails)

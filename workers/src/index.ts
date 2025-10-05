@@ -1,7 +1,9 @@
+import { Bot } from 'grammy'
 import { FlightDO } from './durable'
 import { Env } from './env'
 import { sendTelegramMessage, sendAdmin } from './services/telegram'
 import { getCurrentIdtDateStringNoCache, getCurrentIdtTimeNoCache } from './utils/dateTime'
+import { setupBotHandlers, BotContext } from './handlers/commands'
 
 ////// Export the Durable Object class so the runtime can find it
 export { FlightDO }
@@ -12,8 +14,28 @@ export default {
 		const url = new URL(request.url)
 
 		if (request.method === 'POST' && url.pathname === '/webhook') {
-			const dbStub = env.FLIGHTS_DO.getByName('alarm')
-			return dbStub.fetch(request)
+			// Create bot instance with webhook handling
+			const bot = new Bot<BotContext>(env.BOT_TOKEN)
+
+			// Set up middleware to pass env and ctx to handlers
+			bot.use(async (ctx, next) => {
+				;(ctx as any).env = env
+				;(ctx as any).ctx = stub
+				await next()
+			})
+
+			// Set up all bot handlers
+			setupBotHandlers(bot)
+
+			// Handle webhook
+			try {
+				const update = (await request.json()) as any
+				await bot.handleUpdate(update)
+				return new Response('OK')
+			} catch (error) {
+				console.error('Webhook handling error:', error)
+				return new Response('Error', { status: 500 })
+			}
 		}
 
 		console.log('wwwwwworker request')

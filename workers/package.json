@@ -18,8 +18,7 @@
 		"wrangler": "^4.39.0"
 	},
 	"dependencies": {
-		"ofetch": "^1.4.1",
-		"prettier": "^3.6.2",
-		"typegram": "^5.2.0"
+		"grammy": "^1.38.3",
+		"ofetch": "^1.4.1"
 	}
 }

@@ -1,3 +1,4 @@
+import { Bot, Context } from 'grammy'
 import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
 import { getFlightIdByNumber, getNotTrackedFlights, generateFakeFlights, storeFlights } from '../services/flightData'
@@ -9,18 +10,14 @@ import {
 	formatTimeAgo,
 } from '../utils/formatting'
 import { isValidFlightCode } from '../utils/validation'
-import { CRON_PERIOD_SECONDS, getTelegramUrl } from '../utils/constants'
+import { CRON_PERIOD_SECONDS } from '../utils/constants'
 import type { Env } from '../env'
-import type { Update, CallbackQuery, Message } from 'typegram'
 import type { DOProps } from '../types'
-import { ofetch } from 'ofetch'
 
-export const isDataQuery = (query: CallbackQuery) => {
-	return 'data' in query
-}
-
-export const isTextMessage = (message: Message) => {
-	return 'text' in message
+// Extend Context to include our custom properties
+export interface BotContext extends Context {
+	env: Env
+	ctx: DurableObjectState<DOProps>
 }
 
 const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) => {
@@ -75,458 +72,269 @@ const buildStatusMessage = async (env: Env, ctx: DurableObjectState<DOProps>) =>
 	return responseText
 }
 
-export const handleCommand = async (request: Request, env: Env, ctx: DurableObjectState<DOProps>) => {
-	console.log("handlecommand")
-	const update = await request.json<Update>()
+export const setupBotHandlers = (bot: Bot<BotContext>) => {
+	// Command handlers
+	bot.command('track', async (ctx) => {
+		if (!ctx.chat) return
+		const text = ctx.message?.text || ''
+		await handleTrack(ctx.chat.id, text, ctx.env, ctx.ctx)
+	})
 
-	if ('callback_query' in update && update.callback_query) {
-		const callbackQuery = update.callback_query
-		if (!callbackQuery.message) {
-			try {
-				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						callback_query_id: callbackQuery.id,
-						text: 'This message is too old to interact with',
-						show_alert: true,
-					}),
-				})
-			} catch (error) {
-				console.error('Failed to answer callback query for old message:', {
-					callbackQueryId: callbackQuery.id,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-				// Don't rethrow - just log the error since we can't handle old messages anyway
-			}
-			return new Response('OK')
-		}
+	bot.command('clear_tracked', async (ctx) => {
+		await handleClearTracked(ctx.chat.id, ctx.env, ctx.ctx)
+	})
 
-		const chatId = callbackQuery.message.chat.id
-		const messageId = callbackQuery.message.message_id
+	bot.command('status', async (ctx) => {
+		await handleStatus(ctx.chat.id, ctx.env, ctx.ctx)
+	})
 
-		if (!isDataQuery(callbackQuery)) {
-			try {
-				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						callback_query_id: callbackQuery.id,
-						text: 'Unsupported callback type',
-						show_alert: true,
-					}),
-				})
-			} catch (error) {
-				console.error('Failed to answer unsupported callback query:', {
-					callbackQueryId: callbackQuery.id,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-			}
-			return new Response('OK')
-		}
+	bot.command('test', async (ctx) => {
+		await handleTestData(ctx.chat.id, ctx.env, ctx.ctx)
+	})
 
-		const data = callbackQuery.data
-
-		if (data.startsWith('track_suggested:')) {
-			const flightCodes = data.split(':')[1].split(',')
-			const results = []
-			for (const code of flightCodes) {
-				if (isValidFlightCode(code)) {
-					const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx)
-					if (flightId) {
-						addFlightTracking(chatId, flightId, env, ctx)
-						results.push(`✓ Now tracking ${code.toUpperCase()}`)
-					} else {
-						results.push(`❌ Flight not found: ${code}`)
-					}
-				} else {
-					results.push(`❌ Invalid flight code: ${code}`)
-				}
-			}
-
-			// ✅ Answer callback so Telegram shows success
-			try {
-				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flights...' }),
-				})
-			} catch (error) {
-				console.error('Failed to answer track_suggested callback query:', {
-					callbackQueryId: callbackQuery.id,
-					flightCodes,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-			}
-
-			// ✅ Now behave like pressing "Next"
-			// get current pagination cursor
-			const cursorKey = `pagination_cursor_${chatId}`
-			const cursorStr = ctx.storage.kv.get<string>(cursorKey) || '0'
-			const currentPage = parseInt(cursorStr) || 0
-			const nextPage = currentPage + 1
-
-			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
-			const startIndex = nextPage * 5
-			const endIndex = startIndex + 5
-			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
-
-			ctx.storage.kv.put(cursorKey, nextPage.toString())
-
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
-				pageFlights,
-				nextPage,
-				eligibleFlights.length,
-				ctx
-			)
-
-			let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
-
-			// Navigation buttons
-			const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
-
-			// Pagination row
-			const paginationRow = []
-			if (nextPage > 0) {
-				paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${nextPage - 1}` })
-			}
-			if (endIndex < eligibleFlights.length) {
-				paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${nextPage + 1}` })
-			}
-
-			const allButtons = [...navigationButtons]
-			if (paginationRow.length > 0) allButtons.push(paginationRow)
-			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
-
-			try {
-				await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						chat_id: chatId,
-						message_id: messageId,
-						text: responseText,
-						parse_mode: 'Markdown',
-						reply_markup: { inline_keyboard: allButtons },
-					}),
-				})
-			} catch (error) {
-				console.error('Failed to edit message after track_suggested:', {
-					chatId,
-					messageId,
-					responseText,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-			}
-
-			return new Response('OK')
-		}
-
-		if (data.startsWith('track_single:')) {
-			const flightNumber = data.split(':')[1]
-			// Reuse handleTrack function by constructing a command-like text
-			await handleTrack(chatId, `/track ${flightNumber}`, env, ctx)
-
-			try {
-				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Tracking flight...' }),
-				})
-			} catch (error) {
-				console.error('Failed to answer track_single callback query:', {
-					callbackQueryId: callbackQuery.id,
-					flightNumber,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-			}
-			// Don't need to edit the message since handleTrack will send a new one
-			return new Response('OK')
-		}
-
-		if (data.startsWith('untrack_single:')) {
-			const flightId = data.split(':')[1]
-			await handleUntrack(chatId, flightId, env, ctx)
-
-			try {
-				await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ callback_query_id: callbackQuery.id, text: 'Untracking flight...' }),
-				})
-			} catch (error) {
-				console.error('Failed to answer untrack_single callback query:', {
-					callbackQueryId: callbackQuery.id,
-					flightId,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-			}
-
-			// Update the message to show the new tracked flights list
-			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
-			const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
-
-			// Combine the untrack buttons with navigation buttons
-			const navigationButtons = [
-				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+	// Callback query handlers
+	bot.callbackQuery('get_status', async (ctx) => {
+		if (!ctx.chat) return
+		const responseText = await buildStatusMessage(ctx.env, ctx.ctx)
+		const replyMarkup = {
+			inline_keyboard: [
 				[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-			]
-			const finalMarkup = {
-				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
-			}
-
-			try {
-				await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						chat_id: chatId,
-						message_id: messageId,
-						text: responseText,
-						parse_mode: 'Markdown',
-						reply_markup: finalMarkup,
-					}),
-				})
-			} catch (error) {
-				console.error('Failed to edit message for untrack_single:', {
-					chatId,
-					messageId,
-					responseText,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-			}
-			return new Response('OK')
+				[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+			],
 		}
 
-		let responseText = ''
-		let replyMarkup = null
-		if (data === 'get_status') {
-			responseText = await buildStatusMessage(env, ctx)
-			replyMarkup = {
-				inline_keyboard: [
-					[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
-					[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
-				],
-			}
-		} else if (data === 'show_tracked') {
-			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
-			responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
-			// Combine the untrack buttons with navigation buttons
-			const navigationButtons = [[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }]]
-			replyMarkup = {
-				inline_keyboard: [
-					...(trackedMarkup?.inline_keyboard || []),
-					...navigationButtons,
-					[{ text: '🗑️ Untrack All', callback_data: 'untrack_all' }],
-				],
-			}
-		} else if (data === 'show_suggestions') {
-			ctx.storage.kv.put(`pagination_cursor_${chatId}`, '0')
+		await ctx.editMessageText(responseText, {
+			parse_mode: 'Markdown',
+			reply_markup: replyMarkup,
+		})
+		await ctx.answerCallbackQuery('🔄 Refreshing...')
+	})
 
-			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
+	bot.callbackQuery('show_tracked', async (ctx) => {
+		if (!ctx.chat) return
+		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
+			ctx.chat.id,
+			ctx.env,
+			ctx.ctx
+		)
+		const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
 
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
-				eligibleFlights.slice(0, 5),
-				0,
-				eligibleFlights.length,
-				ctx
-			)
-
-			// Build navigation buttons
-			const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
-
-			// Build pagination buttons - show Next if there are more than 5 flights
-			const paginationRow = []
-			if (eligibleFlights.length > 5) {
-				paginationRow.push({ text: 'Next ➡️', callback_data: 'suggestions_page:1' })
-			}
-
-			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
-			const allButtons = [...navigationButtons]
-
-			if (paginationRow.length > 0) {
-				allButtons.push(paginationRow)
-			}
-
-			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
-
-			// Add debug info to the response text
-			const debugInfo = `\n\n🐛 *Debug:* ${eligibleFlights.length} eligible flights, Next button: ${eligibleFlights.length > 5 ? 'YES' : 'NO'}`
-			responseText = `🎯 *Flight Suggestions*\n\n${text}${debugInfo}`
-
-			replyMarkup = {
-				inline_keyboard: allButtons,
-			}
-		} else if (data.startsWith('suggestions_page:')) {
-			// Handle pagination
-			const page = parseInt(data.split(':')[1])
-			const eligibleFlights = getNotTrackedFlights(chatId, ctx)
-			const startIndex = page * 5
-			const endIndex = startIndex + 5
-			const pageFlights = eligibleFlights.slice(startIndex, endIndex)
-
-			// Update cursor in storage
-			ctx.storage.kv.put(`pagination_cursor_${chatId}`, page.toString())
-
-			const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
-				pageFlights,
-				page,
-				eligibleFlights.length,
-				ctx
-			)
-			responseText = `🎯 *Flight Suggestions*\n\n${text}`
-
-			// Build navigation buttons
-			const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
-
-			// Build pagination buttons row
-			const paginationRow = []
-			if (page > 0) {
-				paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${page - 1}` })
-			}
-			if (endIndex < eligibleFlights.length) {
-				paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${page + 1}` })
-			}
-
-			// Combine all buttons: nav buttons, then pagination (if exists), then track buttons
-			const allButtons = [...navigationButtons]
-
-			if (paginationRow.length > 0) {
-				allButtons.push(paginationRow)
-			}
-
-			allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
-
-			replyMarkup = {
-				inline_keyboard: allButtons,
-			}
-		} else if (data === 'untrack_all') {
-			const clearedCount = clearUserTracking(chatId, env, ctx)
-
-			// Rebuild the tracked flights view after clearing
-			const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(chatId, env, ctx)
-			const responseText =
-				clearedCount > 0
-					? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.\n\n🚨 *Your Tracked Flights*\n\n${trackedMessage}`
-					: 'ℹ️ You had no tracked flights to clear.\n\n🚨 *Your Tracked Flights*\n\n' + trackedMessage
-
-			// Navigation + new Untrack All button
-			const navigationButtons = [[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }]]
-
-			const finalMarkup = {
-				inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
-			}
-
-			try {
-				await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						chat_id: chatId,
-						message_id: messageId,
-						text: responseText,
-						parse_mode: 'Markdown',
-						reply_markup: finalMarkup,
-					}),
-				})
-			} catch (error) {
-				console.error('Failed to edit message for untrack_all:', {
-					chatId,
-					messageId,
-					responseText,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
-			}
-
-			return new Response('OK')
+		const navigationButtons = [[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }]]
+		const replyMarkup = {
+			inline_keyboard: [
+				...(trackedMarkup?.inline_keyboard || []),
+				...navigationButtons,
+				[{ text: '🗑️ Untrack All', callback_data: 'untrack_all' }],
+			],
 		}
 
-		try {
-			await ofetch(`${getTelegramUrl(env)}/answerCallbackQuery`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ callback_query_id: callbackQuery.id, text: '🔄 Refreshing...' }),
-			})
-		} catch (error) {
-			console.error('Failed to answer general callback query:', {
-				callbackQueryId: callbackQuery.id,
-				data,
-				error: error instanceof Error ? error.message : 'Unknown error',
-				status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-			})
-		}
-		try {
-			await ofetch(`${getTelegramUrl(env)}/editMessageText`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					chat_id: chatId,
-					message_id: messageId,
-					text: responseText,
-					parse_mode: 'Markdown',
-					reply_markup: replyMarkup,
-				}),
-			})
-		} catch (error) {
-			// Telegram returns 400 if message content is identical - this is expected and not an error
-			const is400Error = error instanceof Error && 'status' in error && (error as any).status === 400
-			if (!is400Error) {
-				console.error('Failed to edit message for general callback:', {
-					chatId,
-					messageId,
-					data,
-					responseText,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					status: error instanceof Error && 'status' in error ? (error as any).status : 'N/A',
-				})
+		await ctx.editMessageText(responseText, {
+			parse_mode: 'Markdown',
+			reply_markup: replyMarkup,
+		})
+		await ctx.answerCallbackQuery('🔄 Refreshing...')
+	})
+
+	bot.callbackQuery('show_suggestions', async (ctx) => {
+		if (!ctx.chat) return
+		ctx.ctx.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, '0')
+
+		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.ctx)
+
+		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
+			eligibleFlights.slice(0, 5),
+			0,
+			eligibleFlights.length,
+			ctx.ctx
+		)
+
+		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
+		const paginationRow =
+			eligibleFlights.length > 5 ? [{ text: 'Next ➡️', callback_data: 'suggestions_page:1' }] : []
+
+		const allButtons = [...navigationButtons]
+		if (paginationRow.length > 0) allButtons.push(paginationRow)
+		allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+
+		const debugInfo = `\n\n🐛 *Debug:* ${eligibleFlights.length} eligible flights, Next button: ${eligibleFlights.length > 5 ? 'YES' : 'NO'}`
+		const responseText = `🎯 *Flight Suggestions*\n\n${text}${debugInfo}`
+
+		await ctx.editMessageText(responseText, {
+			parse_mode: 'Markdown',
+			reply_markup: { inline_keyboard: allButtons },
+		})
+		await ctx.answerCallbackQuery('🔄 Refreshing...')
+	})
+
+	bot.callbackQuery(/^suggestions_page:\d+$/, async (ctx) => {
+		if (!ctx.chat) return
+		const page = parseInt(ctx.match[1])
+		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.ctx)
+		const startIndex = page * 5
+		const endIndex = startIndex + 5
+		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
+
+		ctx.ctx.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, page.toString())
+
+		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
+			pageFlights,
+			page,
+			eligibleFlights.length,
+			ctx.ctx
+		)
+		const responseText = `🎯 *Flight Suggestions*\n\n${text}`
+
+		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
+		const paginationRow = []
+		if (page > 0) paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${page - 1}` })
+		if (endIndex < eligibleFlights.length)
+			paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${page + 1}` })
+
+		const allButtons = [...navigationButtons]
+		if (paginationRow.length > 0) allButtons.push(paginationRow)
+		allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+
+		await ctx.editMessageText(responseText, {
+			parse_mode: 'Markdown',
+			reply_markup: { inline_keyboard: allButtons },
+		})
+		await ctx.answerCallbackQuery('🔄 Refreshing...')
+	})
+
+	bot.callbackQuery(/^track_suggested:.+$/, async (ctx) => {
+		if (!ctx.chat) return
+		const flightCodes = ctx.match[1].split(',')
+		const results = []
+		for (const code of flightCodes) {
+			if (isValidFlightCode(code)) {
+				const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.ctx)
+				if (flightId) {
+					addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.ctx)
+					results.push(`✓ Now tracking ${code.toUpperCase()}`)
+				} else {
+					results.push(`❌ Flight not found: ${code}`)
+				}
+			} else {
+				results.push(`❌ Invalid flight code: ${code}`)
 			}
 		}
-		return new Response('OK')
-	}
 
-	if ('message' in update && update.message) {
-		const chatId = update.message.chat.id
-		if (!isTextMessage(update.message)) {
-			await sendTelegramMessage(
-				chatId,
-				'This bot only supports text commands. Use /help for available commands.',
-				env
-			)
-			return new Response('OK')
+		await ctx.answerCallbackQuery('Tracking flights...')
+
+		const cursorKey = `pagination_cursor_${ctx.chat.id}`
+		const cursorStr = ctx.ctx.storage.kv.get<string>(cursorKey) || '0'
+		const currentPage = parseInt(cursorStr) || 0
+		const nextPage = currentPage + 1
+
+		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.ctx)
+		const startIndex = nextPage * 5
+		const endIndex = startIndex + 5
+		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
+
+		ctx.ctx.storage.kv.put(cursorKey, nextPage.toString())
+
+		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
+			pageFlights,
+			nextPage,
+			eligibleFlights.length,
+			ctx.ctx
+		)
+
+		let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
+
+		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
+		const paginationRow = []
+		if (nextPage > 0) paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${nextPage - 1}` })
+		if (endIndex < eligibleFlights.length)
+			paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${nextPage + 1}` })
+
+		const allButtons = [...navigationButtons]
+		if (paginationRow.length > 0) allButtons.push(paginationRow)
+		allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
+
+		await ctx.editMessageText(responseText, {
+			parse_mode: 'Markdown',
+			reply_markup: { inline_keyboard: allButtons },
+		})
+	})
+
+	bot.callbackQuery(/^track_single:.+$/, async (ctx) => {
+		if (!ctx.chat) return
+		const flightNumber = ctx.match[1]
+		await handleTrack(ctx.chat.id, `/track ${flightNumber}`, ctx.env, ctx.ctx)
+		await ctx.answerCallbackQuery('Tracking flight...')
+	})
+
+	bot.callbackQuery(/^untrack_single:.+$/, async (ctx) => {
+		if (!ctx.chat) return
+		const flightId = ctx.match[1]
+		await handleUntrack(ctx.chat.id, flightId, ctx.env, ctx.ctx)
+		await ctx.answerCallbackQuery('Untracking flight...')
+
+		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
+			ctx.chat.id,
+			ctx.env,
+			ctx.ctx
+		)
+		const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
+
+		const navigationButtons = [
+			[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
+			[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }],
+		]
+		const finalMarkup = {
+			inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 		}
-		const text = update.message.text
 
-		const commands: { [key: string]: () => Promise<void> } = {
-			'/track': () => handleTrack(chatId, text, env, ctx),
-			'/clear_tracked': () => handleClearTracked(chatId, env, ctx),
-			'/status': () => handleStatus(chatId, env, ctx),
-			'/test': () => handleTestData(chatId, env, ctx),
+		await ctx.editMessageText(responseText, {
+			parse_mode: 'Markdown',
+			reply_markup: finalMarkup,
+		})
+	})
+
+	bot.callbackQuery('untrack_all', async (ctx) => {
+		if (!ctx.chat) return
+		const clearedCount = clearUserTracking(ctx.chat.id, ctx.env, ctx.ctx)
+
+		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
+			ctx.chat.id,
+			ctx.env,
+			ctx.ctx
+		)
+		const responseText =
+			clearedCount > 0
+				? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.\n\n🚨 *Your Tracked Flights*\n\n${trackedMessage}`
+				: 'ℹ️ You had no tracked flights to clear.\n\n🚨 *Your Tracked Flights*\n\n' + trackedMessage
+
+		const navigationButtons = [[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }]]
+		const finalMarkup = {
+			inline_keyboard: [...(trackedMarkup?.inline_keyboard || []), ...navigationButtons],
 		}
-		const command = text.split(' ')[0]
-		const handler =
-			commands[command] ||
-			(async () => {
-				const version = (await env.METADATA.get('version')) || 'Unknown'
-				const lastDeployDate = (await env.METADATA.get('last_deploy_date')) || 'Unknown'
-				await sendTelegramMessage(
-					chatId,
-					`Unknown command.\n` + `📦 Version: ${version}\n` + `📦 Code updated: ${lastDeployDate}\n`,
-					env
-				)
-			})
-		await handler()
-		return new Response('OK')
-	}
 
-	return new Response('OK')
+		await ctx.editMessageText(responseText, {
+			parse_mode: 'Markdown',
+			reply_markup: finalMarkup,
+		})
+		await ctx.answerCallbackQuery('🔄 Refreshing...')
+	})
+
+	// Handle unknown commands
+	bot.on('message:text', async (ctx) => {
+		const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
+		const lastDeployDate = (await ctx.env.METADATA.get('last_deploy_date')) || 'Unknown'
+		await ctx.reply(`Unknown command.\n📦 Version: ${version}\n📦 Code updated: ${lastDeployDate}`, {
+			parse_mode: 'Markdown',
+		})
+	})
+
+	// Handle old callback queries
+	bot.callbackQuery(/.*/, async (ctx) => {
+		if (!ctx.callbackQuery.message) {
+			await ctx.answerCallbackQuery({ text: 'This message is too old to interact with', show_alert: true })
+			return
+		}
+		await ctx.answerCallbackQuery({ text: 'Unsupported callback type', show_alert: true })
+	})
 }
 
 const handleTrack = async (chatId: number, text: string, env: Env, ctx: DurableObjectState<DOProps>) => {
