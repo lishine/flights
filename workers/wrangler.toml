@@ -1,15 +1,12 @@
-name = "flights-dev"
+name = "flights"
 main = "dist/worker.js"
 compatibility_date = "2025-09-24"
 observability = { enabled = true }
 
-[vars]
-BOT_TOKEN = ""
-ADMIN_CHAT_TOKEN = ""
-
 [[kv_namespaces]]
 binding = "METADATA"
-id = "61263aff35f94b97805907138f2a0e91"
+id = "89fa0007bfc2442f9f73fe9642687f47"
+
 [[durable_objects.bindings]]
 name = "FLIGHTS_DO"
 class_name = "FlightDO"
@@ -17,3 +14,13 @@ class_name = "FlightDO"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["FlightDO"]
+
+
+# DEV ENVIRONMENT
+[env.dev]
+name = "flights-dev"
+vars = { ENVIRONMENT = "development" }
+
+[[env.dev.kv_namespaces]]
+binding = "METADATA"
+id = "61263aff35f94b97805907138f2a0e91"
