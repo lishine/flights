@@ -60,7 +60,7 @@ export const sendAdmin = async (
 	type: 'debug' | 'deploy' | 'log' = 'debug'
 ) => {
 	if (type === 'deploy') {
-		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
+		await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env)
 		return
 	}
 
@@ -68,5 +68,5 @@ export const sendAdmin = async (
 		return
 	}
 
-	await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env, false)
+	await sendTelegramMessage(parseInt(env.ADMIN_CHAT_ID), message, env)
 }

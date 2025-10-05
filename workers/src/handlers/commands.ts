@@ -331,6 +331,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 const handleTrack = async (ctx: BotContext) => {
 	if (!ctx.chat) return
 	const text = ctx.message?.text || ''
+	sendAdmin(text, ctx.env, ctx.DOStore)
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
 	for (const code of flightCodes) {
