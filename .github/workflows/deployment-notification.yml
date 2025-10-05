@@ -6,7 +6,7 @@ on:
 jobs:
     notify:
         runs-on: ubuntu-latest
-        if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'production'
+        if: github.event.deployment_status.state == 'success'
         permissions:
             contents: write
 
@@ -27,19 +27,18 @@ jobs:
                   echo "update_date=$UPDATE_DATE" >> $GITHUB_OUTPUT
                   echo "Calculated version: $VERSION"
 
-            - name: Create Release
+            - name: Create Release (only for production)
               id: create_release
+              if: github.event.deployment.environment == 'production'
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   TAG="v${{ steps.version.outputs.version }}"
 
-                  # Check if tag/release already exists
                   if gh release view "$TAG" >/dev/null 2>&1; then
                     echo "Release $TAG already exists, skipping creation"
                     RELEASE_URL=$(gh release view "$TAG" --json url -q .url)
                   else
-                    # Create tag and release
                     RELEASE_URL=$(gh release create "$TAG" \
                       --title "Release v${{ steps.version.outputs.version }}" \
                       --notes "Automated deployment from commit ${{ github.sha }}
@@ -54,14 +53,20 @@ jobs:
               run: sleep 10
 
             - name: Verify deployment is actually working
+              id: verify
               run: |
-                  # Check if the deployed site is actually responding
-                  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://flights.vim55k.workers.dev/" || echo "000")
+                  if [ "${{ github.event.deployment.environment }}" = "production" ]; then
+                    URL="https://flights.vim55k.workers.dev/"
+                  else
+                    URL="https://flights-dev.vim55k.workers.dev/"
+                  fi
+
+                  echo "Checking deployment at: $URL"
+                  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
                   echo "Deployment health check HTTP status: $HTTP_STATUS"
 
                   if [ "$HTTP_STATUS" != "200" ]; then
                     echo "❌ Deployment health check failed (HTTP $HTTP_STATUS)"
-                    echo "Skipping deployment notification"
                     exit 1
                   else
                     echo "✅ Deployment health check passed"
@@ -69,7 +74,17 @@ jobs:
 
             - name: Call deploy webhook
               run: |
-                  curl -X POST "https://flights.vim55k.workers.dev/deploy-webhook" \
+                  if [ "${{ github.event.deployment.environment }}" = "production" ]; then
+                    DEPLOY_URL="https://flights.vim55k.workers.dev/deploy-webhook"
+                    RELEASE_URL="${{ steps.create_release.outputs.release_url }}"
+                  else
+                    DEPLOY_URL="https://flights-dev.vim55k.workers.dev/deploy-webhook"
+                    RELEASE_URL=""
+                  fi
+
+                  echo "Calling webhook: $DEPLOY_URL"
+
+                  curl -X POST "$DEPLOY_URL" \
                     -H "Content-Type: application/json" \
-                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"${{ steps.create_release.outputs.html_url }}\"}" \
+                    -d "{\"version\":\"${{ steps.version.outputs.version }}\",\"update_date\":\"${{ steps.version.outputs.update_date }}\",\"release_url\":\"$RELEASE_URL\"}" \
                     -w "\nHTTP Status: %{http_code}\n"
