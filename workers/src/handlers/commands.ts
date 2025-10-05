@@ -251,8 +251,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery(/^track_single:.+$/, async (ctx) => {
 		if (!ctx.chat) return
 		const flightNumber = ctx.match[1]
-		ctx.message = { text: `/track ${flightNumber}` } as any // Mock message for handleTrack
-		await handleTrack(ctx)
+		await handleTrackSingle(ctx, flightNumber)
 		await ctx.answerCallbackQuery('Tracking flight...')
 	})
 
@@ -348,6 +347,24 @@ const handleTrack = async (ctx: BotContext) => {
 		}
 	}
 	await sendTelegramMessage(ctx.chat.id, results.join('\n'), ctx.env)
+}
+
+const handleTrackSingle = async (ctx: BotContext, flightNumber: string) => {
+	if (!ctx.chat) return
+	const code = flightNumber.toUpperCase().replace(' ', '')
+	let result = ''
+	if (isValidFlightCode(code)) {
+		const flightId = getFlightIdByNumber(code, ctx.DOStore)
+		if (flightId) {
+			addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
+			result = `✓ Now tracking ${code}`
+		} else {
+			result = `❌ Flight not found: ${code}`
+		}
+	} else {
+		result = `❌ Invalid flight code: ${code}`
+	}
+	await sendTelegramMessage(ctx.chat.id, result, ctx.env)
 }
 
 const handleUntrack = async (ctx: BotContext, flightId: string) => {
