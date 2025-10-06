@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@grammyjs/ratelimiter": "^1.2.1",
     "prettier": "^3.6.2"
   }
 }

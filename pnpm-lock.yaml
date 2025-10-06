@@ -8,11 +8,17 @@ importers:
 
   .:
     dependencies:
+      '@grammyjs/ratelimiter':
+        specifier: ^1.2.1
+        version: 1.2.1
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
 
 packages:
+
+  '@grammyjs/ratelimiter@1.2.1':
+    resolution: {integrity: sha512-4bmVUBCBnIb2epbDiBLCvvnVjaYg7kDCPR1Ptt6gqoxm5vlD8BjainYv+yjF6221hu2KUv8QAckumDI+6xyGsQ==}
 
   prettier@3.6.2:
     resolution: {integrity: sha512-I7AIg5boAr5R0FFtJ6rCfD+LFsWHp81dolrFD8S79U9tb8Az2nGrJncnMSnys+bpQJfRUzqs9hnA81OAA3hCuQ==}
@@ -20,5 +26,7 @@ packages:
     hasBin: true
 
 snapshots:
+
+  '@grammyjs/ratelimiter@1.2.1': {}
 
   prettier@3.6.2: {}
