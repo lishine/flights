@@ -13,7 +13,7 @@ import { isValidFlightCode } from '../utils/validation'
 import { CRON_PERIOD_SECONDS } from '../utils/constants'
 import type { BotContext, DOProps } from '../types'
 
-// .
+// ..
 
 const buildStatusMessage = async (ctx: BotContext) => {
 	const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
