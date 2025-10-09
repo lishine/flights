@@ -319,7 +319,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		})
 	})
 
-	bot.callbackQuery(/^toggle_checkbox:(true|false)$/, async (ctx) => {
+	bot.callbackQuery(/^toggle_checkbox:(\d+):(true|false)$/, async (ctx) => {
 		if (!ctx.chat) return
 		await handleCheckboxToggle(ctx)
 	})
@@ -401,19 +401,27 @@ const handleStatus = async (ctx: BotContext) => {
 const handleCheckboxCommand = async (ctx: BotContext) => {
 	if (!ctx.chat) return
 	
-	// Start with unchecked state (default)
-	const currentState = false
+	// Start with first checkbox selected (default)
+	const selectedCheckbox = 0
 	
-	// Create checkbox button with current state
-	const checkboxText = currentState ? '☑️ Checkbox (Checked)' : '☐ Checkbox (Unchecked)'
+	// Create 4 checkbox buttons with radio button behavior
+	const checkboxes = []
+	for (let i = 0; i < 4; i++) {
+		const isSelected = i === selectedCheckbox
+		const checkboxText = isSelected ? '☑️' : '☐'
+		checkboxes.push({
+			text: `${checkboxText} Option ${i + 1}`,
+			callback_data: `toggle_checkbox:${i}:${isSelected}`
+		})
+	}
 	
 	const replyMarkup = {
 		inline_keyboard: [
-			[{ text: checkboxText, callback_data: `toggle_checkbox:${currentState}` }]
+			checkboxes
 		]
 	}
 	
-	await ctx.reply('🔘 *Checkbox Demo*\n\nClick the button below to toggle the checkbox state:', {
+	await ctx.reply('🔘 *Checkbox Demo*\n\nSelect one option below (only one can be selected):', {
 		parse_mode: 'Markdown',
 		reply_markup: replyMarkup
 	})
@@ -422,26 +430,35 @@ const handleCheckboxCommand = async (ctx: BotContext) => {
 const handleCheckboxToggle = async (ctx: BotContext) => {
 	if (!ctx.chat) return
 	
-	// Get current state from callback data
-	const currentStateStr = ctx.match![1]
+	// Get checkbox index and current state from callback data
+	const checkboxIndex = parseInt(ctx.match![1])
+	const currentStateStr = ctx.match![2]
 	const currentState = currentStateStr === 'true'
 	
-	// Toggle the state
-	const newState = !currentState
+	// For radio button behavior, we always select the clicked checkbox
+	const selectedCheckbox = checkboxIndex
 	
-	// Update button text based on new state
-	const checkboxText = newState ? '☑️ Checkbox (Checked)' : '☐ Checkbox (Unchecked)'
+	// Create 4 checkbox buttons with updated states
+	const checkboxes = []
+	for (let i = 0; i < 4; i++) {
+		const isSelected = i === selectedCheckbox
+		const checkboxText = isSelected ? '☑️' : '☐'
+		checkboxes.push({
+			text: `${checkboxText} Option ${i + 1}`,
+			callback_data: `toggle_checkbox:${i}:${isSelected}`
+		})
+	}
 	
 	const replyMarkup = {
 		inline_keyboard: [
-			[{ text: checkboxText, callback_data: `toggle_checkbox:${newState}` }]
+			checkboxes
 		]
 	}
 	
 	// Send state change notification
-	const stateMessage = newState ? '✅ Checkbox is now checked!' : '❌ Checkbox is now unchecked!'
+	const stateMessage = `✅ Option ${selectedCheckbox + 1} is now selected!`
 	
-	await ctx.editMessageText(`🔘 *Checkbox Demo*\n\n${stateMessage}\n\nClick the button below to toggle the checkbox state:`, {
+	await ctx.editMessageText(`🔘 *Checkbox Demo*\n\n${stateMessage}\n\nSelect one option below (only one can be selected):`, {
 		parse_mode: 'Markdown',
 		reply_markup: replyMarkup
 	})
