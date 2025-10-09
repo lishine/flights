@@ -76,6 +76,8 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await handleStatus(ctx)
 	})
 
+	bot.command('untrack', async (ctx) => {})
+
 	bot.callbackQuery('get_status', async (ctx) => {
 		if (!ctx.chat) return
 		const responseText = await buildStatusMessage(ctx)
@@ -371,7 +373,6 @@ const handleClearTracked = async (ctx: BotContext) => {
 }
 
 const handleStatus = async (ctx: BotContext) => {
-	if (!ctx.chat) return
 	const responseText = await buildStatusMessage(ctx)
 
 	const inlineKeyboard = [
@@ -379,5 +380,5 @@ const handleStatus = async (ctx: BotContext) => {
 		[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
 	]
 
-	await sendTelegramMessage(ctx.chat.id, responseText, ctx.env, false, { inline_keyboard: inlineKeyboard })
+	await sendTelegramMessage(ctx.chat?.id, responseText, ctx.env, false, { inline_keyboard: inlineKeyboard })
 }

@@ -12,12 +12,13 @@ export const getBotInstance = (token: string) => {
 }
 
 export const sendTelegramMessage = async (
-	chatId: number,
+	chatId: number | undefined,
 	text: string,
 	env: Env,
 	disableNotification: boolean = false,
 	replyMarkup?: any
 ) => {
+	if (!chatId) return
 	try {
 		const bot = getBotInstance(env.BOT_TOKEN)
 
