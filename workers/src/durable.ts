@@ -1,6 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Bot } from 'grammy'
-import { limit } from '@grammyjs/ratelimiter'
 import { runScheduledJob } from './handlers/cron'
 import { setupBotHandlers } from './handlers/commands'
 import { resetSchema } from './schema'
@@ -27,12 +26,6 @@ export class FlightDO extends DurableObject<Env, DOProps> {
                                 gramCtx.DOStore = this.ctx
                                 await next()
                         })
-                        this.bot.use(
-                                limit({
-                                        timeFrame: 2000,
-                                        limit: 3,
-                                })
-                        )
                         setupBotHandlers(this.bot)
 
                         this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
