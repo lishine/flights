@@ -300,11 +300,26 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.on('message:text', async (ctx) => {
+		if (!ctx.chat) return
+		
+		const text = ctx.message?.text || ''
+		
+		// Handle checkbox button trigger
+		if (text.trim() === 'c') {
+			await handleCheckboxCommand(ctx)
+			return
+		}
+		
 		const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
 		const lastDeployDate = (await ctx.env.METADATA.get('last_deploy_date')) || 'Unknown'
 		await ctx.reply(`Unknown command.\n📦 Version: ${version}\n📦 Code updated: ${lastDeployDate}`, {
 			parse_mode: 'Markdown',
 		})
+	})
+
+	bot.callbackQuery(/^toggle_checkbox:(true|false)$/, async (ctx) => {
+		if (!ctx.chat) return
+		await handleCheckboxToggle(ctx)
 	})
 
 	bot.callbackQuery(/.*/, async (ctx) => {
@@ -380,4 +395,55 @@ const handleStatus = async (ctx: BotContext) => {
 	]
 
 	await sendTelegramMessage(ctx.chat.id, responseText, ctx.env, false, { inline_keyboard: inlineKeyboard })
+}
+
+const handleCheckboxCommand = async (ctx: BotContext) => {
+	if (!ctx.chat) return
+	
+	// Start with unchecked state (default)
+	const currentState = false
+	
+	// Create checkbox button with current state
+	const checkboxText = currentState ? '☑️ Checkbox (Checked)' : '☐ Checkbox (Unchecked)'
+	
+	const replyMarkup = {
+		inline_keyboard: [
+			[{ text: checkboxText, callback_data: `toggle_checkbox:${currentState}` }]
+		]
+	}
+	
+	await ctx.reply('🔘 *Checkbox Demo*\n\nClick the button below to toggle the checkbox state:', {
+		parse_mode: 'Markdown',
+		reply_markup: replyMarkup
+	})
+}
+
+const handleCheckboxToggle = async (ctx: BotContext) => {
+	if (!ctx.chat) return
+	
+	// Get current state from callback data
+	const currentStateStr = ctx.match![1]
+	const currentState = currentStateStr === 'true'
+	
+	// Toggle the state
+	const newState = !currentState
+	
+	// Update button text based on new state
+	const checkboxText = newState ? '☑️ Checkbox (Checked)' : '☐ Checkbox (Unchecked)'
+	
+	const replyMarkup = {
+		inline_keyboard: [
+			[{ text: checkboxText, callback_data: `toggle_checkbox:${newState}` }]
+		]
+	}
+	
+	// Send state change notification
+	const stateMessage = newState ? '✅ Checkbox is now checked!' : '❌ Checkbox is now unchecked!'
+	
+	await ctx.editMessageText(`🔘 *Checkbox Demo*\n\n${stateMessage}\n\nClick the button below to toggle the checkbox state:`, {
+		parse_mode: 'Markdown',
+		reply_markup: replyMarkup
+	})
+	
+	await ctx.answerCallbackQuery(stateMessage)
 }
