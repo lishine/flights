@@ -13,6 +13,8 @@ import { isValidFlightCode } from '../utils/validation'
 import { CRON_PERIOD_SECONDS } from '../utils/constants'
 import type { BotContext, DOProps } from '../types'
 
+// .
+
 const buildStatusMessage = async (ctx: BotContext) => {
 	const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
 	const lastDeployDate = (await ctx.env.METADATA.get('last_deploy_date')) || 'Unknown'
@@ -303,15 +305,15 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 	bot.on('message:text', async (ctx) => {
 		if (!ctx.chat) return
-		
+
 		const text = ctx.message?.text || ''
-		
+
 		// Handle checkbox button trigger
 		if (text.trim() === 'c') {
 			await handleCheckboxCommand(ctx)
 			return
 		}
-		
+
 		const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
 		const lastDeployDate = (await ctx.env.METADATA.get('last_deploy_date')) || 'Unknown'
 		await ctx.reply(`Unknown command.\n📦 Version: ${version}\n📦 Code updated: ${lastDeployDate}`, {
@@ -400,10 +402,10 @@ const handleStatus = async (ctx: BotContext) => {
 
 const handleCheckboxCommand = async (ctx: BotContext) => {
 	if (!ctx.chat) return
-	
+
 	// Start with first checkbox selected (default)
 	const selectedCheckbox = 0
-	
+
 	// Create 4 checkbox buttons with radio button behavior
 	const checkboxes = []
 	for (let i = 0; i < 4; i++) {
@@ -411,33 +413,31 @@ const handleCheckboxCommand = async (ctx: BotContext) => {
 		const checkboxText = isSelected ? '☑️' : '☐'
 		checkboxes.push({
 			text: `${checkboxText} Option ${i + 1}`,
-			callback_data: `toggle_checkbox:${i}:${isSelected}`
+			callback_data: `toggle_checkbox:${i}:${isSelected}`,
 		})
 	}
-	
+
 	const replyMarkup = {
-		inline_keyboard: [
-			checkboxes
-		]
+		inline_keyboard: [checkboxes],
 	}
-	
+
 	await ctx.reply('🔘 *Checkbox Demo*\n\nSelect one option below (only one can be selected):', {
 		parse_mode: 'Markdown',
-		reply_markup: replyMarkup
+		reply_markup: replyMarkup,
 	})
 }
 
 const handleCheckboxToggle = async (ctx: BotContext) => {
 	if (!ctx.chat) return
-	
+
 	// Get checkbox index and current state from callback data
 	const checkboxIndex = parseInt(ctx.match![1])
 	const currentStateStr = ctx.match![2]
 	const currentState = currentStateStr === 'true'
-	
+
 	// For radio button behavior, we always select the clicked checkbox
 	const selectedCheckbox = checkboxIndex
-	
+
 	// Create 4 checkbox buttons with updated states
 	const checkboxes = []
 	for (let i = 0; i < 4; i++) {
@@ -445,23 +445,24 @@ const handleCheckboxToggle = async (ctx: BotContext) => {
 		const checkboxText = isSelected ? '☑️' : '☐'
 		checkboxes.push({
 			text: `${checkboxText} Option ${i + 1}`,
-			callback_data: `toggle_checkbox:${i}:${isSelected}`
+			callback_data: `toggle_checkbox:${i}:${isSelected}`,
 		})
 	}
-	
+
 	const replyMarkup = {
-		inline_keyboard: [
-			checkboxes
-		]
+		inline_keyboard: [checkboxes],
 	}
-	
+
 	// Send state change notification
 	const stateMessage = `✅ Option ${selectedCheckbox + 1} is now selected!`
-	
-	await ctx.editMessageText(`🔘 *Checkbox Demo*\n\n${stateMessage}\n\nSelect one option below (only one can be selected):`, {
-		parse_mode: 'Markdown',
-		reply_markup: replyMarkup
-	})
-	
+
+	await ctx.editMessageText(
+		`🔘 *Checkbox Demo*\n\n${stateMessage}\n\nSelect one option below (only one can be selected):`,
+		{
+			parse_mode: 'Markdown',
+			reply_markup: replyMarkup,
+		}
+	)
+
 	await ctx.answerCallbackQuery(stateMessage)
 }
