@@ -435,7 +435,7 @@ const handleCheckboxToggle = async (ctx: BotContext) => {
 	const currentStateStr = ctx.match![2]
 	const currentState = currentStateStr === 'true'
 
-	// If clicking the same checkbox that's already selected, do nothing
+	// If clicking the same checkbox that's already selected, just answer the callback
 	if (currentState) {
 		await ctx.answerCallbackQuery(`Option ${checkboxIndex + 1} is already selected!`)
 		return
@@ -462,13 +462,19 @@ const handleCheckboxToggle = async (ctx: BotContext) => {
 	// Send state change notification
 	const stateMessage = `✅ Option ${selectedCheckbox + 1} is now selected!`
 
-	await ctx.editMessageText(
-		`🔘 *Checkbox Demo*\n\n${stateMessage}\n\nSelect one option below (only one can be selected):`,
-		{
-			parse_mode: 'Markdown',
-			reply_markup: replyMarkup,
-		}
-	)
+	try {
+		await ctx.editMessageText(
+			`🔘 *Checkbox Demo*\n\n${stateMessage}\n\nSelect one option below (only one can be selected):`,
+			{
+				parse_mode: 'Markdown',
+				reply_markup: replyMarkup,
+			}
+		)
+	} catch (error) {
+		// Handle the case where the message content hasn't changed
+		// This can happen if there's a race condition or duplicate clicks
+		console.error('Error editing message:', error)
+	}
 
 	await ctx.answerCallbackQuery(stateMessage)
 }
