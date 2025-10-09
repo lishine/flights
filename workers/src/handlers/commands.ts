@@ -435,6 +435,12 @@ const handleCheckboxToggle = async (ctx: BotContext) => {
 	const currentStateStr = ctx.match![2]
 	const currentState = currentStateStr === 'true'
 
+	// If clicking the same checkbox that's already selected, do nothing
+	if (currentState) {
+		await ctx.answerCallbackQuery(`Option ${checkboxIndex + 1} is already selected!`)
+		return
+	}
+
 	// For radio button behavior, we always select the clicked checkbox
 	const selectedCheckbox = checkboxIndex
 
