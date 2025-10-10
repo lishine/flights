@@ -42,3 +42,7 @@ sqlite - 100,000 wrties per day
 # Acceptance!!
 
 cd workers && npx tsc --noEmit
+
+
+## storage
+for front end telegram state use inline sending data , not store it in backend db

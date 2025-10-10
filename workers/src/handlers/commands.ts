@@ -124,7 +124,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 	bot.callbackQuery('show_suggestions', async (ctx) => {
 		if (!ctx.chat) return
-		ctx.DOStore.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, '0')
 
 		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
 
@@ -161,8 +160,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
 
-		ctx.DOStore.storage.kv.put(`pagination_cursor_${ctx.chat.id}`, page.toString())
-
 		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 			pageFlights,
 			page,
@@ -188,9 +185,10 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await ctx.answerCallbackQuery('🔄 Refreshing...')
 	})
 
-	bot.callbackQuery(/^track_suggested:(.+)$/, async (ctx) => {
+	bot.callbackQuery(/^track_suggested:(\d+):(.+)$/, async (ctx) => {
 		if (!ctx.chat) return
-		const flightCodes = ctx.match[1].split(',')
+		const currentPage = parseInt(ctx.match[1])
+		const flightCodes = ctx.match[2].split(',')
 		const results = []
 		for (const code of flightCodes) {
 			if (isValidFlightCode(code)) {
@@ -208,17 +206,12 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 		await ctx.answerCallbackQuery('Tracking flights...')
 
-		const cursorKey = `pagination_cursor_${ctx.chat.id}`
-		const cursorStr = ctx.DOStore.storage.kv.get<string>(cursorKey) || '0'
-		const currentPage = parseInt(cursorStr) || 0
 		const nextPage = currentPage + 1
 
 		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
 		const startIndex = nextPage * 5
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
-
-		ctx.DOStore.storage.kv.put(cursorKey, nextPage.toString())
 
 		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 			pageFlights,

@@ -192,11 +192,11 @@ export const formatFlightSuggestions = (
 	message += `Use: \`/track ${flights.map((f) => escapeMarkdown(f.flight_number)).join(' ')}\`\n`
 	message += `Or track individually: \`/track LY086\``
 
-	// Add "Track All" button at the bottom
+	// Add "Track All" button at the bottom with page information
 	inlineKeyboard.push([
 		{
 			text: '✈️ Track All Suggested',
-			callback_data: `track_suggested:${flights.map((f) => f.flight_number).join(',')}`,
+			callback_data: `track_suggested:${currentPage}:${flights.map((f) => f.flight_number).join(',')}`,
 		},
 	])
 

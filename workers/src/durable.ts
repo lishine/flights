@@ -8,10 +8,9 @@ import { sendTelegramMessage, sendAdmin } from './services/telegram'
 import { BotContext, DOProps } from './types'
 
 export class FlightDO extends DurableObject<Env, DOProps> {
-        private bot!: Bot<BotContext>
-        private alarmCount: number = 0
-        private instanceStartTime: number = Date.now() // Add this
-        private requestCount: number = 0 // Add this
+	private bot!: Bot<BotContext>
+	private instanceStartTime: number = Date.now() // Add this
+	private requestCount: number = 0 // Add this
 
         constructor(ctx: DurableObjectState<DOProps>, env: Env) {
                 console.log('constructor')
@@ -19,19 +18,17 @@ export class FlightDO extends DurableObject<Env, DOProps> {
                 this.resetCache()
 
                 ctx.blockConcurrencyWhile(async () => {
-                        this.bot = new Bot<BotContext>(env.BOT_TOKEN)
-                        await this.bot.init()
-                        this.bot.use(async (gramCtx, next) => {
-                                gramCtx.env = this.env
-                                gramCtx.DOStore = this.ctx
-                                await next()
-                        })
-                        setupBotHandlers(this.bot)
-
-                        this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
-
-                        // No alarm activation in constructor - will be activated on first fetch
-                        console.log('Constructor completed - alarm will be activated on first fetch')
+                	this.bot = new Bot<BotContext>(env.BOT_TOKEN)
+                	await this.bot.init()
+                	this.bot.use(async (gramCtx, next) => {
+                		gramCtx.env = this.env
+                		gramCtx.DOStore = this.ctx
+                		await next()
+                	})
+                	setupBotHandlers(this.bot)
+             
+                	// No alarm activation in constructor - will be activated on first fetch
+                	console.log('Constructor completed - alarm will be activated on first fetch')
                 })
         }
 
@@ -98,40 +95,36 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 
                 switch (url.pathname) {
                         case '/reset-schema':
-                                resetSchema(this.ctx)
-                                // Also restart alarms after schema reset
-                                this.setAlarmCount(0)
-                                const oneMinute = CRON_PERIOD_SECONDS * 1000
-                                await this.ctx.storage.setAlarm(Date.now() + oneMinute)
-                                console.log('Schema reset and alarm restart triggered')
-                                return new Response('Schema reset successfully and alarms restarted', {
-                                        headers: { 'Content-Type': 'text/plain' },
-                                })
+                        	resetSchema(this.ctx)
+                        	// Also restart alarms after schema reset
+                        	const oneMinute = CRON_PERIOD_SECONDS * 1000
+                        	await this.ctx.storage.setAlarm(Date.now() + oneMinute)
+                        	console.log('Schema reset and alarm restart triggered')
+                        	return new Response('Schema reset successfully and alarms restarted', {
+                        		headers: { 'Content-Type': 'text/plain' },
+                        	})
                         case '/status':
-                                const count = this.getAlarmCount()
-                                return new Response(`FlightDO Status - Alarms fired: ${count}`, {
-                                        headers: { 'Content-Type': 'text/plain' },
-                                })
-
+                        	return new Response(`FlightDO Status - Running`, {
+                        		headers: { 'Content-Type': 'text/plain' },
+                        	})
+                     
                         case '/reset':
-                                this.setAlarmCount(0)
-                                // Force restart the alarm process
-                                const resetPeriod = CRON_PERIOD_SECONDS * 1000
-                                await this.ctx.storage.setAlarm(Date.now() + resetPeriod)
-                                console.log('Manual alarm restart triggered')
-                                return new Response('Alarm count reset and new alarm set', {
-                                        headers: { 'Content-Type': 'text/plain' },
-                                })
+                        	// Force restart the alarm process
+                        	const resetPeriod = CRON_PERIOD_SECONDS * 1000
+                        	await this.ctx.storage.setAlarm(Date.now() + resetPeriod)
+                        	console.log('Manual alarm restart triggered')
+                        	return new Response('New alarm set', {
+                        		headers: { 'Content-Type': 'text/plain' },
+                        	})
 
                         default:
-                                // Return current status with fresh count from storage
-                                const currentAlarm = await this.ctx.storage.getAlarm()
-                                const alarmTime = currentAlarm ? new Date(currentAlarm).toISOString() : 'Not set'
-                                const currentCount = this.getAlarmCount()
-
-                                return new Response(`FlightDO Active\nAlarms fired: ${currentCount}\nNext alarm: ${alarmTime}`, {
-                                        headers: { 'Content-Type': 'text/plain' },
-                                })
+                        	// Return current status
+                        	const currentAlarm = await this.ctx.storage.getAlarm()
+                        	const alarmTime = currentAlarm ? new Date(currentAlarm).toISOString() : 'Not set'
+                     
+                        	return new Response(`FlightDO Active\nNext alarm: ${alarmTime}`, {
+                        		headers: { 'Content-Type': 'text/plain' },
+                        	})
                 }
         }
 
@@ -140,17 +133,13 @@ export class FlightDO extends DurableObject<Env, DOProps> {
          * Uses SQLite-backed synchronous KV API for all storage operations
          */
         async alarm(): Promise<void> {
-                this.resetCache() // Reset at start of each alarm
-                const currentCount = this.getAlarmCount()
-                const newCount = currentCount + 1
-
-                // Run the scheduled job
-                runScheduledJob(this.env, this.ctx)
-
-                this.setAlarmCount(newCount)
-
-                // Schedule next alarm using common method
-                await this.scheduleAlarm()
+        	this.resetCache() // Reset at start of each alarm
+      
+        	// Run the scheduled job
+        	runScheduledJob(this.env, this.ctx)
+      
+        	// Schedule next alarm using common method
+        	await this.scheduleAlarm()
         }
 
         /**
@@ -197,13 +186,4 @@ export class FlightDO extends DurableObject<Env, DOProps> {
                 return this.ctx.storage.kv.list(options)
         }
 
-        /** Get alarm count using synchronous KV API */
-        getAlarmCount(): number {
-                return this.ctx.storage.kv.get<number>('alarmCount') || 0
-        }
-
-        /** Set alarm count using synchronous KV API */
-        setAlarmCount(count: number): void {
-                this.ctx.storage.kv.put('alarmCount', count)
-        }
 }
