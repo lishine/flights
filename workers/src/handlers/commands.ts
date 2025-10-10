@@ -18,26 +18,38 @@ const buildStatusMessage = async (ctx: BotContext) => {
 	const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
 	const lastDeployDate = (await ctx.env.METADATA.get('last_deploy_date')) || 'Unknown'
 
-	const lastUpdatedResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'lastUpdated')
-	const updateCountResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'updateCount')
-	const dataLengthResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'dataLength')
-	const errorResult = ctx.DOStore.storage.sql.exec('SELECT value FROM status WHERE key = ?', 'last-error')
+	// Single SQL query to get all status data at once
+	const statusResults = ctx.DOStore.storage.sql
+		.exec(
+			`
+		SELECT key, value
+		FROM status
+		WHERE key IN ('lastUpdated', 'updateCount', 'dataLength', 'last-error')
+	`
+		)
+		.toArray() as { key: string; value: string }[]
 
-	const lastUpdated = lastUpdatedResult.toArray()[0] as { value: string } | undefined
-	const updateCount = updateCountResult.toArray()[0] as { value: string } | undefined
-	const dataLength = dataLengthResult.toArray()[0] as { value: string } | undefined
-	const errorResultRow = errorResult.toArray()[0] as { value: string } | undefined
+	// Create a map for easier access to status values
+	const statusMap = new Map<string, string>()
+	statusResults.forEach((row) => statusMap.set(row.key, row.value))
 
-	const errorData = errorResultRow?.value
+	// Extract values with defaults
+	const lastUpdatedValue = statusMap.get('lastUpdated') || ''
+	const updateCountValue = statusMap.get('updateCount') || '0'
+	const dataLengthValue = statusMap.get('dataLength') || '0'
+	const errorData = statusMap.get('last-error')
 
+	// Parse numeric values safely
+	const timestamp = parseInt(lastUpdatedValue) || 0
+	const totalFetches = parseInt(updateCountValue) || 0
+	const flightsCount = parseInt(dataLengthValue) || 0
+
+	// Build status message
 	let statusMessage = '📊 *System Status*\n\n'
 
-	const timestamp = lastUpdated?.value ? parseInt(lastUpdated.value) || 0 : 0
-	if (lastUpdated?.value && timestamp > 0) {
+	if (timestamp > 0) {
 		const lastUpdate = formatTimestampForDisplay(timestamp)
 		const timeAgo = formatTimeAgo(timestamp, ctx.DOStore)
-		const totalFetches = updateCount?.value ? parseInt(updateCount.value) || 0 : 0
-		const flightsCount = dataLength?.value ? parseInt(dataLength.value) || 0 : 0
 
 		statusMessage +=
 			`✅ System: Online\n\n` +
@@ -54,14 +66,17 @@ const buildStatusMessage = async (ctx: BotContext) => {
 	}
 
 	if (errorData) {
-		const error = JSON.parse(errorData)
-		const errorTime = new Date(error.timestamp).toLocaleString()
-		statusMessage += `\n\n⚠️ Last error: ${escapeMarkdown(errorTime)}`
+		try {
+			const error = JSON.parse(errorData)
+			const errorTime = new Date(error.timestamp).toLocaleString()
+			statusMessage += `\n\n⚠️ Last error: ${escapeMarkdown(errorTime)}`
+		} catch (e) {
+			// Fallback if error data is malformed
+			statusMessage += `\n\n⚠️ Last error: Unable to parse error data`
+		}
 	}
 
-	const responseText = statusMessage + `\n\n_⏱️ Data refreshes every ${CRON_PERIOD_SECONDS} seconds_`
-
-	return responseText
+	return statusMessage + `\n\n_⏱️ Data refreshes every ${CRON_PERIOD_SECONDS} seconds_`
 }
 
 export const setupBotHandlers = (bot: Bot<BotContext>) => {
