@@ -192,10 +192,11 @@ export const formatFlightSuggestions = (
 	message += `Or track individually: \`/track LY086\``
 
 	// Add "Track All" button at the bottom with page information
+	console.log(`---------- track_suggested:${currentPage}:${flights.map((f) => f.id).join(',')}`)
 	inlineKeyboard.push([
 		{
 			text: '✈️ Track All Suggested',
-			callback_data: `track_suggested:${currentPage}:${flights.map((f) => f.id).join(',')}`,
+			callback_data: `track_suggested:${currentPage}:${flights.map((f) => escapeMarkdown(f.id)).join(',')}`,
 		},
 	])
 

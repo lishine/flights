@@ -57,7 +57,6 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 							reply_markup: options?.replyMarkup,
 						})
 					} catch (error) {
-						// Enhanced error logging with more details
 						if (error instanceof Error) {
 							const errorDetails: any = {
 								message: error.message,
@@ -84,9 +83,6 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 				await next()
 			})
 			setupBotHandlers(this.bot)
-
-			// No alarm activation in constructor - will be activated on first fetch
-			console.log('Constructor completed - alarm will be activated on first fetch')
 		})
 	}
 
