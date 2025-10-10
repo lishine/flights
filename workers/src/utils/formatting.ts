@@ -195,7 +195,7 @@ export const formatFlightSuggestions = (
 	inlineKeyboard.push([
 		{
 			text: '✈️ Track All Suggested',
-			callback_data: `track_suggested:${currentPage}:${flights.map((f) => f.flight_number).join(',')}`,
+			callback_data: `track_suggested:${currentPage}:${flights.map((f) => f.id).join(',')}`,
 		},
 	])
 
@@ -205,4 +205,12 @@ export const formatFlightSuggestions = (
 			inline_keyboard: inlineKeyboard,
 		},
 	}
+}
+
+export const toFlightId = (flightNumber: string, eta: number) => {
+	return `${flightNumber}_${eta}`
+}
+
+export const parseFlightNumber = (flightId: string) => {
+	return flightId.split('_')[0]
 }

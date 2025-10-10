@@ -2,7 +2,7 @@ import { getCurrentIdtTime } from '../utils/dateTime'
 import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Flight, VercelApiResponse, VercelFlightResponse, DOProps } from '../types'
-import { formatTimeFromTimestamp } from '../utils/formatting'
+import { formatTimeFromTimestamp, toFlightId } from '../utils/formatting'
 export const cleanupCompletedFlights = (ctx: DurableObjectState<DOProps>): number => {
 	const nowIdt = getCurrentIdtTime(ctx)
 	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago
@@ -71,7 +71,7 @@ export const fetchLatestFlights = async (ctx: DurableObjectState<DOProps>) => {
 
 	const filterAndTransformFlights = (rawFlights: VercelFlightResponse[]) => {
 		return rawFlights.map((flight) => {
-			const flightId = `${flight.fln}_${flight.sta}`
+			const flightId = toFlightId(flight.fln, flight.sta)
 
 			return {
 				id: flightId,
@@ -223,14 +223,17 @@ export const getFlightIdByNumber = (flightNumber: string, ctx: DurableObjectStat
 	const allFlights = getCurrentFlights(ctx)
 
 	const futureFlights = allFlights
-		.filter((flight) => flight.flight_number === flightNumber && flight.eta > nowIdt.getTime())
+		.filter(
+			(flight) =>
+				flight.flight_number === flightNumber &&
+				(flight.eta > nowIdt.getTime() || (flight.status !== 'LANDED' && flight.status !== 'CANCELED'))
+		)
 		.sort((a, b) => a.eta - b.eta)
 
 	if (futureFlights.length > 0) {
 		return futureFlights[0].id
 	}
 
-	// Fallback to any flight with that number
 	const flight = allFlights.find((flight) => flight.flight_number === flightNumber)
 	return flight?.id
 }

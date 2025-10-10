@@ -1,4 +1,4 @@
-type Status = 'LANDED' | 'CANCELED' | 'NOT FINAL' | 'FINAL' | 'DELAYED' | (string & {})
+type Status = 'LANDING' | 'LANDED' | 'CANCELED' | 'NOT FINAL' | 'FINAL' | 'DELAYED' | (string & {})
 
 export type Flight = {
 	id: string

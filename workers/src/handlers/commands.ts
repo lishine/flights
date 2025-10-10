@@ -7,12 +7,10 @@ import {
 	escapeMarkdown,
 	formatTimestampForDisplay,
 	formatTimeAgo,
+	parseFlightNumber,
 } from '../utils/formatting'
-import { isValidFlightCode } from '../utils/validation'
 import { CRON_PERIOD_SECONDS } from '../utils/constants'
-import type { BotContext, DOProps } from '../types'
-
-// ..
+import type { BotContext } from '../types'
 
 const buildStatusMessage = async (ctx: BotContext) => {
 	const version = (await ctx.env.METADATA.get('version')) || 'Unknown'
@@ -151,8 +149,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		if (paginationRow.length > 0) allButtons.push(paginationRow)
 		allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
 
-		const debugInfo = `\n\n🐛 *Debug:* ${eligibleFlights.length} eligible flights, Next button: ${eligibleFlights.length > 5 ? 'YES' : 'NO'}`
-		const responseText = `🎯 *Flight Suggestions*\n\n${text}${debugInfo}`
+		const responseText = `🎯 *Flight Suggestions*\n\n${text}`
 
 		await ctx.editMessageText(responseText, {
 			parse_mode: 'Markdown',
@@ -195,20 +192,12 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 	bot.callbackQuery(/^track_suggested:(\d+):(.+)$/, async (ctx) => {
 		const currentPage = parseInt(ctx.match[1])
-		const flightCodes = ctx.match[2].split(',')
+		const flightIds = ctx.match[2].split(',')
 		const results = []
-		for (const code of flightCodes) {
-			if (isValidFlightCode(code)) {
-				const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
-				if (flightId) {
-					addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
-					results.push(`✓ Now tracking ${code.toUpperCase()}`)
-				} else {
-					results.push(`❌ Flight not found: ${code}`)
-				}
-			} else {
-				results.push(`❌ Invalid flight code: ${code}`)
-			}
+		for (const flightId of flightIds) {
+			const flightNumber = parseFlightNumber(flightId)
+			addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
+			results.push(`✓ Now tracking ${flightNumber.toUpperCase()}`)
 		}
 
 		await ctx.answerCallbackQuery('Tracking flights...')
@@ -332,16 +321,12 @@ const handleTrack = async (ctx: BotContext) => {
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
 	for (const code of flightCodes) {
-		if (isValidFlightCode(code)) {
-			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
-			if (flightId) {
-				addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
-				results.push(`✓ Now tracking ${code.toUpperCase()}`)
-			} else {
-				results.push(`❌ Flight not found: ${code}`)
-			}
+		const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
+		if (flightId) {
+			addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
+			results.push(`✓ Now tracking ${code.toUpperCase()}`)
 		} else {
-			results.push(`❌ Invalid flight code: ${code}`)
+			results.push(`❌ Flight not found: ${code}`)
 		}
 	}
 	await ctx.sendTelegramMessage(results.join('\n'))
@@ -350,16 +335,12 @@ const handleTrack = async (ctx: BotContext) => {
 const handleTrackSingle = async (ctx: BotContext, flightNumber: string) => {
 	const code = flightNumber.toUpperCase().replace(' ', '')
 	let result = ''
-	if (isValidFlightCode(code)) {
-		const flightId = getFlightIdByNumber(code, ctx.DOStore)
-		if (flightId) {
-			addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
-			result = `✓ Now tracking ${code}`
-		} else {
-			result = `❌ Flight not found: ${code}`
-		}
+	const flightId = getFlightIdByNumber(code, ctx.DOStore)
+	if (flightId) {
+		addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
+		result = `✓ Now tracking ${code}`
 	} else {
-		result = `❌ Invalid flight code: ${code}`
+		result = `❌ Flight not found: ${code}`
 	}
 	await ctx.sendTelegramMessage(result)
 }
