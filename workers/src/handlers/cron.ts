@@ -18,7 +18,7 @@ export const runScheduledJob = async (ctx: BotContext) => {
 	try {
 		initializeSchema(ctx.DOStore)
 
-		const currentFlights = await fetchLatestFlights(ctx.env, ctx.DOStore)
+		const currentFlights = await fetchLatestFlights(ctx.DOStore)
 		writeStatusData(ctx.DOStore, currentFlights.length)
 
 		const previousFlights = getCurrentFlights(ctx.DOStore)
@@ -44,7 +44,7 @@ export const runScheduledJob = async (ctx: BotContext) => {
 			const currentFlight = currentFlightsMap[flightId]
 
 			if (currentFlight) {
-				const changes = detectChanges(prevFlight, currentFlight, ctx.env, ctx.DOStore)
+				const changes = detectChanges(prevFlight, currentFlight, ctx.DOStore)
 				if (changes.length > 0) {
 					changesByFlight[flightId] = { flight: currentFlight, changes }
 				}
@@ -69,7 +69,7 @@ export const runScheduledJob = async (ctx: BotContext) => {
 
 		if (now - lastCleanupTime >= tenMinutes) {
 			console.log('Running cleanup (10 minute interval)')
-			cleanupCompletedFlights(ctx.env, ctx.DOStore)
+			cleanupCompletedFlights(ctx.DOStore)
 
 			ctx.DOStore.storage.sql.exec(
 				"INSERT INTO status (key, value) VALUES ('last_cleanup_time', ?) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",

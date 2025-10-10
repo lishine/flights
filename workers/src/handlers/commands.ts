@@ -98,7 +98,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery('show_tracked', async (ctx) => {
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.validChatId,
-			ctx.env,
 			ctx.DOStore
 		)
 		const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
@@ -187,7 +186,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 			if (isValidFlightCode(code)) {
 				const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
 				if (flightId) {
-					addFlightTracking(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
+					addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
 					results.push(`✓ Now tracking ${code.toUpperCase()}`)
 				} else {
 					results.push(`❌ Flight not found: ${code}`)
@@ -242,7 +241,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.validChatId,
-			ctx.env,
 			ctx.DOStore
 		)
 		const responseText = `🚨 *Your Tracked Flights*\n\n${trackedMessage}`
@@ -262,11 +260,10 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery('untrack_all', async (ctx) => {
-		const clearedCount = clearUserTracking(ctx.validChatId, ctx.env, ctx.DOStore)
+		const clearedCount = clearUserTracking(ctx.validChatId, ctx.DOStore)
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
 			ctx.validChatId,
-			ctx.env,
 			ctx.DOStore
 		)
 		const responseText =
@@ -323,7 +320,7 @@ const handleTrack = async (ctx: BotContext) => {
 		if (isValidFlightCode(code)) {
 			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
 			if (flightId) {
-				addFlightTracking(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
+				addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
 				results.push(`✓ Now tracking ${code.toUpperCase()}`)
 			} else {
 				results.push(`❌ Flight not found: ${code}`)
@@ -341,7 +338,7 @@ const handleTrackSingle = async (ctx: BotContext, flightNumber: string) => {
 	if (isValidFlightCode(code)) {
 		const flightId = getFlightIdByNumber(code, ctx.DOStore)
 		if (flightId) {
-			addFlightTracking(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
+			addFlightTracking(ctx.validChatId, flightId, ctx.DOStore)
 			result = `✓ Now tracking ${code}`
 		} else {
 			result = `❌ Flight not found: ${code}`
@@ -353,11 +350,11 @@ const handleTrackSingle = async (ctx: BotContext, flightNumber: string) => {
 }
 
 const handleUntrack = async (ctx: BotContext, flightId: string) => {
-	untrackFlight(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
+	untrackFlight(ctx.validChatId, flightId, ctx.DOStore)
 }
 
 const handleClearTracked = async (ctx: BotContext) => {
-	const clearedCount = clearUserTracking(ctx.validChatId, ctx.env, ctx.DOStore)
+	const clearedCount = clearUserTracking(ctx.validChatId, ctx.DOStore)
 	const message =
 		clearedCount > 0
 			? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.`

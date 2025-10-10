@@ -70,7 +70,6 @@ export const formatTimestampForDisplay = (timestamp: number): string => {
 
 export const formatTrackingListOptimized = (
 	chatId: number,
-	env: Env,
 	ctx: DurableObjectState<DOProps>
 ): { text: string; replyMarkup: InlineKeyboardMarkup | null } => {
 	const flights = getUserTrackedFlights(chatId, ctx)

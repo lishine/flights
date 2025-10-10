@@ -3,7 +3,7 @@ import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Flight, VercelApiResponse, VercelFlightResponse, DOProps } from '../types'
 import { formatTimeFromTimestamp } from '../utils/formatting'
-export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState<DOProps>): number => {
+export const cleanupCompletedFlights = (ctx: DurableObjectState<DOProps>): number => {
 	const nowIdt = getCurrentIdtTime(ctx)
 	const cutoffTimestamp = nowIdt.getTime() - 1 * 60 * 60 * 1000 // 1 hour ago
 
@@ -42,12 +42,7 @@ export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState<DOProp
 	}
 }
 
-export const detectChanges = (
-	prevFlight: Flight,
-	currentFlight: Flight,
-	env: Env,
-	ctx: DurableObjectState<DOProps>
-) => {
+export const detectChanges = (prevFlight: Flight, currentFlight: Flight, ctx: DurableObjectState<DOProps>) => {
 	const changes: string[] = []
 
 	if (prevFlight.status !== currentFlight.status) {
@@ -70,7 +65,7 @@ export const detectChanges = (
 	return changes
 }
 
-export const fetchLatestFlights = async (env: Env, ctx: DurableObjectState<DOProps>) => {
+export const fetchLatestFlights = async (ctx: DurableObjectState<DOProps>) => {
 	const rawApiData = await ofetch<VercelApiResponse>(VERCEL_FLIGHTS_API_URL)
 	console.log('fetched from vercel', rawApiData.Flights.length)
 
