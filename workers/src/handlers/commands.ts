@@ -1,5 +1,4 @@
 import { Bot, Context } from 'grammy'
-import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { addFlightTracking, clearUserTracking, untrackFlight } from '../services/tracking'
 import { getFlightIdByNumber, getNotTrackedFlights } from '../services/flightData'
 import {
@@ -81,7 +80,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.command('untrack', async (ctx) => {})
 
 	bot.callbackQuery('get_status', async (ctx) => {
-		if (!ctx.chat) return
 		const responseText = await buildStatusMessage(ctx)
 		const replyMarkup = {
 			inline_keyboard: [
@@ -98,9 +96,8 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery('show_tracked', async (ctx) => {
-		if (!ctx.chat) return
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
-			ctx.chat.id,
+			ctx.validChatId,
 			ctx.env,
 			ctx.DOStore
 		)
@@ -123,9 +120,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery('show_suggestions', async (ctx) => {
-		if (!ctx.chat) return
-
-		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
+		const eligibleFlights = getNotTrackedFlights(ctx.validChatId, ctx.DOStore)
 
 		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
 			eligibleFlights.slice(0, 5),
@@ -153,9 +148,8 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery(/^suggestions_page:(\d+)$/, async (ctx) => {
-		if (!ctx.chat) return
 		const page = parseInt(ctx.match[1])
-		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
+		const eligibleFlights = getNotTrackedFlights(ctx.validChatId, ctx.DOStore)
 		const startIndex = page * 5
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
@@ -186,7 +180,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery(/^track_suggested:(\d+):(.+)$/, async (ctx) => {
-		if (!ctx.chat) return
 		const currentPage = parseInt(ctx.match[1])
 		const flightCodes = ctx.match[2].split(',')
 		const results = []
@@ -194,7 +187,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 			if (isValidFlightCode(code)) {
 				const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
 				if (flightId) {
-					addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
+					addFlightTracking(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
 					results.push(`✓ Now tracking ${code.toUpperCase()}`)
 				} else {
 					results.push(`❌ Flight not found: ${code}`)
@@ -208,7 +201,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 		const nextPage = currentPage + 1
 
-		const eligibleFlights = getNotTrackedFlights(ctx.chat.id, ctx.DOStore)
+		const eligibleFlights = getNotTrackedFlights(ctx.validChatId, ctx.DOStore)
 		const startIndex = nextPage * 5
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
@@ -239,18 +232,16 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery(/^track_single:(.+)$/, async (ctx) => {
-		if (!ctx.chat) return
 		const flightNumber = ctx.match[1]
 		await handleTrackSingle(ctx, flightNumber)
 	})
 
 	bot.callbackQuery(/^untrack_single:(.+)$/, async (ctx) => {
-		if (!ctx.chat) return
 		const flightId = ctx.match[1]
 		await handleUntrack(ctx, flightId)
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
-			ctx.chat.id,
+			ctx.validChatId,
 			ctx.env,
 			ctx.DOStore
 		)
@@ -271,11 +262,10 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery('untrack_all', async (ctx) => {
-		if (!ctx.chat) return
-		const clearedCount = clearUserTracking(ctx.chat.id, ctx.env, ctx.DOStore)
+		const clearedCount = clearUserTracking(ctx.validChatId, ctx.env, ctx.DOStore)
 
 		const { text: trackedMessage, replyMarkup: trackedMarkup } = formatTrackingListOptimized(
-			ctx.chat.id,
+			ctx.validChatId,
 			ctx.env,
 			ctx.DOStore
 		)
@@ -297,8 +287,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.on('message:text', async (ctx) => {
-		if (!ctx.chat) return
-
 		const text = ctx.message?.text || ''
 
 		// Handle checkbox button trigger
@@ -315,7 +303,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	})
 
 	bot.callbackQuery(/^toggle_checkbox:(\d+):(true|false)$/, async (ctx) => {
-		if (!ctx.chat) return
 		await handleCheckboxToggle(ctx)
 	})
 
@@ -329,7 +316,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 }
 
 const handleTrack = async (ctx: BotContext) => {
-	if (!ctx.chat) return
 	const text = ctx.message?.text || ''
 	const flightCodes = text.split(' ').slice(1)
 	const results = []
@@ -337,7 +323,7 @@ const handleTrack = async (ctx: BotContext) => {
 		if (isValidFlightCode(code)) {
 			const flightId = getFlightIdByNumber(code.toUpperCase().replace(' ', ''), ctx.DOStore)
 			if (flightId) {
-				addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
+				addFlightTracking(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
 				results.push(`✓ Now tracking ${code.toUpperCase()}`)
 			} else {
 				results.push(`❌ Flight not found: ${code}`)
@@ -346,17 +332,16 @@ const handleTrack = async (ctx: BotContext) => {
 			results.push(`❌ Invalid flight code: ${code}`)
 		}
 	}
-	await sendTelegramMessage(ctx.chat.id, results.join('\n'), ctx.env)
+	await ctx.sendTelegramMessage(results.join('\n'))
 }
 
 const handleTrackSingle = async (ctx: BotContext, flightNumber: string) => {
-	if (!ctx.chat) return
 	const code = flightNumber.toUpperCase().replace(' ', '')
 	let result = ''
 	if (isValidFlightCode(code)) {
 		const flightId = getFlightIdByNumber(code, ctx.DOStore)
 		if (flightId) {
-			addFlightTracking(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
+			addFlightTracking(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
 			result = `✓ Now tracking ${code}`
 		} else {
 			result = `❌ Flight not found: ${code}`
@@ -364,22 +349,20 @@ const handleTrackSingle = async (ctx: BotContext, flightNumber: string) => {
 	} else {
 		result = `❌ Invalid flight code: ${code}`
 	}
-	await sendTelegramMessage(ctx.chat.id, result, ctx.env)
+	await ctx.sendTelegramMessage(result)
 }
 
 const handleUntrack = async (ctx: BotContext, flightId: string) => {
-	if (!ctx.chat) return
-	untrackFlight(ctx.chat.id, flightId, ctx.env, ctx.DOStore)
+	untrackFlight(ctx.validChatId, flightId, ctx.env, ctx.DOStore)
 }
 
 const handleClearTracked = async (ctx: BotContext) => {
-	if (!ctx.chat) return
-	const clearedCount = clearUserTracking(ctx.chat.id, ctx.env, ctx.DOStore)
+	const clearedCount = clearUserTracking(ctx.validChatId, ctx.env, ctx.DOStore)
 	const message =
 		clearedCount > 0
 			? `✅ Cleared ${clearedCount} tracked flight${clearedCount > 1 ? 's' : ''} from your subscriptions.`
 			: 'ℹ️ You had no tracked flights to clear.'
-	await sendTelegramMessage(ctx.chat.id, message, ctx.env)
+	await ctx.sendTelegramMessage(message)
 }
 
 const handleStatus = async (ctx: BotContext) => {
@@ -390,12 +373,13 @@ const handleStatus = async (ctx: BotContext) => {
 		[{ text: '🎯 Show Flight Suggestions', callback_data: 'show_suggestions' }],
 	]
 
-	await sendTelegramMessage(ctx.chat?.id, responseText, ctx.env, false, { inline_keyboard: inlineKeyboard })
+	await ctx.sendTelegramMessage(responseText, {
+		disableNotification: false,
+		replyMarkup: { inline_keyboard: inlineKeyboard },
+	})
 }
 
 const handleCheckboxCommand = async (ctx: BotContext) => {
-	if (!ctx.chat) return
-
 	// Start with first checkbox selected (default)
 	const selectedCheckbox = 0
 
@@ -421,8 +405,6 @@ const handleCheckboxCommand = async (ctx: BotContext) => {
 }
 
 const handleCheckboxToggle = async (ctx: BotContext) => {
-	if (!ctx.chat) return
-
 	// Get checkbox index and current state from callback data
 	const checkboxIndex = parseInt(ctx.match![1])
 	const currentStateStr = ctx.match![2]

@@ -1,12 +1,10 @@
-import { sendTelegramMessage, sendAdmin } from '../services/telegram'
-import type { Flight, DOProps } from '../types'
+import type { Flight, DOProps, BotContext } from '../types'
 
 export const sendFlightAlerts = async (
 	changesByFlight: Record<string, { flight: Flight; changes: string[] }>,
-	env: Env,
-	ctx: DurableObjectState<DOProps>
+	ctx: BotContext
 ) => {
-	const subsResult = ctx.storage.sql.exec('SELECT flight_id, telegram_id FROM subscriptions')
+	const subsResult = ctx.DOStore.storage.sql.exec('SELECT flight_id, telegram_id FROM subscriptions')
 	const allSubs = subsResult.toArray() as { flight_id: string; telegram_id: string }[]
 
 	const subscriptionMap = new Map<string, Set<string>>()
@@ -40,17 +38,15 @@ export const sendFlightAlerts = async (
 
 		if (subscribers && subscribers.length > 0) {
 			for (const telegram_id of subscribers) {
-				await sendAlert(Number(telegram_id), flightChange.flight, flightChange.changes, env)
+				await sendAlert(Number(telegram_id), flightChange.flight, flightChange.changes, ctx)
 			}
 		}
 	}
 }
 
-const sendAlert = async (userId: number, flight: Flight, changes: string[], env: Env) => {
+const sendAlert = async (userId: number, flight: Flight, changes: string[], ctx: BotContext) => {
 	const message = `🚨 *Flight Update: ${flight.flight_number}*\n\n${changes.join('\n')}\n\nCity: ${
 		flight.city || 'Unknown'
 	}\nAirline: ${flight.airline || 'Unknown'}`
-	await sendTelegramMessage(userId, message, env, false)
-
-	// Cleanup is now handled by cron every 10 minutes
+	await ctx.sendTelegramMessage(message, { chatId: userId })
 }

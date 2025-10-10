@@ -49,5 +49,15 @@ import { Context } from 'grammy'
 
 export type BotContext = Context & {
 	env: Env
-	DOStore: DurableObjectState<DOProps>  // renamed from ctx
+	DOStore: DurableObjectState<DOProps> // renamed from ctx
+	validChatId: number
+	sendTelegramMessage: (
+		text: string,
+		options?: {
+			disableNotification?: boolean
+			replyMarkup?: any
+			sendAdmin?: 'debug' | 'deploy' | 'log'
+			chatId?: number
+		}
+	) => Promise<void>
 }

@@ -2,7 +2,6 @@ import { getCurrentIdtTime } from '../utils/dateTime'
 import { VERCEL_FLIGHTS_API_URL } from '../utils/constants'
 import { ofetch } from 'ofetch'
 import type { Flight, VercelApiResponse, VercelFlightResponse, DOProps } from '../types'
-import { sendTelegramMessage, sendAdmin } from '../services/telegram'
 import { formatTimeFromTimestamp } from '../utils/formatting'
 export const cleanupCompletedFlights = (env: Env, ctx: DurableObjectState<DOProps>): number => {
 	const nowIdt = getCurrentIdtTime(ctx)
