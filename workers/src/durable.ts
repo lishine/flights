@@ -3,7 +3,7 @@ import { Bot } from 'grammy'
 import { runScheduledJob } from './handlers/cron'
 import { setupBotHandlers } from './handlers/commands'
 import { resetSchema } from './schema'
-import { CRON_PERIOD_SECONDS } from './utils/constants'
+import { CRON_PERIOD_SECONDS, ALARM_MIN_PERIOD, ALARM_MAX_PERIOD } from './utils/constants'
 import { sendTelegramMessage, sendAdmin } from './services/telegram'
 import { BotContext, DOProps } from './types'
 
@@ -30,13 +30,8 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 
                         this.alarmCount = ctx.storage.kv.get<number>('alarmCount') || 0
 
-                        let currentAlarm = await ctx.storage.getAlarm()
-                        if (currentAlarm == null) {
-                                console.log('constructor currentAlarm == null')
-                                const oneMinute = CRON_PERIOD_SECONDS * 1000 // 1 minute in milliseconds
-                                console.log(`Setting initial alarm for ${oneMinute}ms from now`)
-                                await ctx.storage.setAlarm(Date.now() + oneMinute)
-                        }
+                        // No alarm activation in constructor - will be activated on first fetch
+                        console.log('Constructor completed - alarm will be activated on first fetch')
                 })
         }
 
@@ -47,13 +42,35 @@ export class FlightDO extends DurableObject<Env, DOProps> {
                 })
         }
 
+        /**
+         * Common method to schedule alarm with random delay
+         */
+        private async scheduleAlarm(): Promise<void> {
+                const randomDelay = ALARM_MIN_PERIOD + Math.random() * (ALARM_MAX_PERIOD - ALARM_MIN_PERIOD)
+                const nextAlarmTime = Date.now() + randomDelay
+                await this.ctx.storage.setAlarm(nextAlarmTime)
+                console.log(`Alarm scheduled for ${new Date(nextAlarmTime).toISOString()} (${randomDelay}ms)`)
+        }
+
         async fetch(request: Request): Promise<Response> {
                 this.resetCache() // Reset at start of each request
                 const url = new URL(request.url)
 
                 this.requestCount++ // Increment on every request
 
-                if (request.method === 'POST' && url.pathname === '/webhook') {
+                // Check if this is a Telegram webhook request
+                const isTelegramRequest = request.method === 'POST' && url.pathname === '/webhook'
+                
+                if (isTelegramRequest) {
+                        // Check if alarm is running
+                        const currentAlarm = await this.ctx.storage.getAlarm()
+                        
+                        if (currentAlarm == null) {
+                                console.log('No alarm running, scheduling new alarm and running job')
+                                await this.scheduleAlarm()
+                                
+                        }
+                        
                         try {
                                 const update = (await request.json()) as any
                                 await this.bot.handleUpdate(update)
@@ -127,13 +144,13 @@ export class FlightDO extends DurableObject<Env, DOProps> {
                 const currentCount = this.getAlarmCount()
                 const newCount = currentCount + 1
 
+                // Run the scheduled job
                 runScheduledJob(this.env, this.ctx)
 
                 this.setAlarmCount(newCount)
 
-                const period = CRON_PERIOD_SECONDS * 1000
-                const nextAlarmTime = Date.now() + period
-                await this.ctx.storage.setAlarm(nextAlarmTime)
+                // Schedule next alarm using common method
+                await this.scheduleAlarm()
         }
 
         /**
