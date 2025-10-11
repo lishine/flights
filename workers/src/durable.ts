@@ -18,18 +18,13 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 		super(ctx, env)
 		this.resetCache()
 
-		ctx.blockConcurrencyWhile(async () => {
-			this.bot = new Bot<BotContext>(env.BOT_TOKEN)
-			await this.bot.init()
-			this.bot.use(async (gramCtx, next) => {
-				gramCtx.env = this.env
-				gramCtx.DOStore = this.ctx
-				if (!gramCtx.chatId) {
-					return
-				}
-				gramCtx.validChatId = gramCtx.chatId
+		// Initialize gramCtx with minimal implementation for use by alarm handler
 
-				gramCtx.sendTelegramMessage = async (
+		ctx.blockConcurrencyWhile(async () => {
+			this.gramCtx = {
+				env: this.env,
+				DOStore: this.ctx,
+				sendTelegramMessage: async (
 					text: string,
 					options?: {
 						disableNotification?: boolean
@@ -41,12 +36,12 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 					let chatId: number
 					if (options?.sendAdmin) {
 						const type = options.sendAdmin
-						if (type === 'debug' && !gramCtx.DOStore.props.debug) return
-						chatId = parseInt(gramCtx.env.ADMIN_CHAT_ID)
+						if (type === 'debug' && !this.ctx.props.debug) return
+						chatId = parseInt(env.ADMIN_CHAT_ID)
 					} else if (options?.chatId) {
 						chatId = options?.chatId
 					} else {
-						chatId = gramCtx.validChatId!
+						chatId = this.gramCtx.validChatId!
 					}
 					try {
 						console.log(`Sending Telegram message to ${chatId}, length: ${text.length}`)
@@ -78,8 +73,17 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 							})
 						}
 					}
+				},
+			} as BotContext
+
+			this.bot.use(async (gramCtx, next) => {
+				if (!gramCtx.chatId) {
+					return
 				}
-				this.gramCtx = gramCtx
+				this.gramCtx.validChatId = gramCtx.chatId
+
+				gramCtx = Object.assign(gramCtx, this.gramCtx)
+
 				await next()
 			})
 			setupBotHandlers(this.bot)
