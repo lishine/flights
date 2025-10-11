@@ -192,11 +192,23 @@ export const formatFlightSuggestions = (
 	message += `Or track individually: \`/track LY086\``
 
 	// Add "Track All" button at the bottom with page information
-	console.log(`---------- track_suggested:${currentPage}:${flights.map((f) => f.id).join(',')}`)
+	// Limit to first 2 flights to avoid callback data size limit (64 bytes)
+	const flightsForCallback = flights.slice(0, 3)
+	const callbackData = `track_suggested:${currentPage}:${flightsForCallback.map((f) => escapeMarkdown(f.id)).join(',')}`
+	console.log(
+		`---------- Original flights count: ${flights.length}, Callback flights count: ${flightsForCallback.length}`
+	)
+	console.log(`---------- Callback data length: ${callbackData.length} bytes`)
+	console.log(`---------- ${callbackData}`)
+
+	if (flights.length > 2) {
+		message += `\n⚠️ Note: "Track All" button only tracks first 2 flights due to limitations.`
+	}
+
 	inlineKeyboard.push([
 		{
 			text: '✈️ Track All Suggested',
-			callback_data: `track_suggested:${currentPage}:${flights.map((f) => escapeMarkdown(f.id)).join(',')}`,
+			callback_data: callbackData,
 		},
 	])
 
