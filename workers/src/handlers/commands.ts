@@ -193,6 +193,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery(/^track_suggested:(\d+):(.+)$/, async (ctx) => {
 		const currentPage = parseInt(ctx.match[1])
 		const flightIds = ctx.match[2].split(',')
+		console.log('******message text', ctx.callbackQuery.message?.text)
 		const results = []
 		for (const flightId of flightIds) {
 			const flightNumber = parseFlightNumber(flightId)
