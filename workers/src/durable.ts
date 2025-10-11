@@ -21,6 +21,9 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 		// Initialize gramCtx with minimal implementation for use by alarm handler
 
 		ctx.blockConcurrencyWhile(async () => {
+			this.bot = new Bot<BotContext>(env.BOT_TOKEN)
+			await this.bot.init()
+
 			this.gramCtx = {
 				env: this.env,
 				DOStore: this.ctx,
