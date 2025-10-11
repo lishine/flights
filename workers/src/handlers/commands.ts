@@ -190,10 +190,36 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		await ctx.answerCallbackQuery('🔄 Refreshing...')
 	})
 
-	bot.callbackQuery(/^track_suggested:(\d+):(.+)$/, async (ctx) => {
+	bot.callbackQuery(/^track_suggested:(\d+)$/, async (ctx) => {
 		const currentPage = parseInt(ctx.match[1])
-		const flightIds = ctx.match[2].split(',')
-		console.log('******message text', ctx.callbackQuery.message?.text)
+
+		// Extract flight IDs from the message text using the invisible link
+		let flightIds: string[] = []
+		const messageText = ctx.callbackQuery.message?.text || ''
+		const messageEntities = ctx.callbackQuery.message?.entities || []
+
+		// Look for text_link entities that contain our encoded data
+		for (const entity of messageEntities) {
+			if (entity.type === 'text_link' && entity.url?.startsWith('tg://btn/')) {
+				// Extract the base64 encoded data from the URL
+				const base64Encoded = entity.url.replace('tg://btn/', '')
+				try {
+					// Decode the base64 to get the flight IDs
+					const decoded = atob(base64Encoded)
+					flightIds = decoded.split(',')
+					break
+				} catch (error) {
+					console.error('Failed to decode flight IDs from message:', error)
+				}
+			}
+		}
+
+		if (flightIds.length === 0) {
+			await ctx.answerCallbackQuery({ text: 'Error: Could not extract flight data', show_alert: true })
+			return
+		}
+
+		console.log('****** Extracted flight IDs:', flightIds)
 		const results = []
 		for (const flightId of flightIds) {
 			const flightNumber = parseFlightNumber(flightId)

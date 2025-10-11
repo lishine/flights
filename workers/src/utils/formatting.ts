@@ -192,18 +192,19 @@ export const formatFlightSuggestions = (
 	message += `Or track individually: \`/track LY086\``
 
 	// Add "Track All" button at the bottom with page information
-	// Limit to first 2 flights to avoid callback data size limit (64 bytes)
-	const flightsForCallback = flights.slice(0, 2)
-	const callbackData = `track_suggested:${currentPage}:${flightsForCallback.map((f) => escapeMarkdown(f.id)).join(',')}`
-	console.log(
-		`---------- Original flights count: ${flights.length}, Callback flights count: ${flightsForCallback.length}`
-	)
-	console.log(`---------- Callback data length: ${callbackData.length} bytes`)
-	console.log(`---------- ${callbackData}`)
-
-	if (flights.length > 2) {
-		message += `\n⚠️ Note: "Track All" button only tracks first 2 flights due to limitations.`
-	}
+	// Encode flight IDs in the message text to avoid callback data size limit
+	const flightIdsStr = flights.map((f) => escapeMarkdown(f.id)).join(',')
+	
+	// Create an invisible link with the flight IDs encoded in base64
+	const base64Encoded = btoa(flightIdsStr)
+	const invisibleLink = `<a href="tg://btn/${base64Encoded}">\u200b</a>`
+	
+	// Prepend the invisible link to the message
+	message = invisibleLink + message
+	
+	// Use minimal callback data with just the page number
+	const callbackData = `track_suggested:${currentPage}`
+	console.log(`---------- Flight IDs encoded in message, callback data: ${callbackData}`)
 
 	inlineKeyboard.push([
 		{
