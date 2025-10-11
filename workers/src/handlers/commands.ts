@@ -191,29 +191,18 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery(/^track_suggested:(\d+)$/, async (ctx) => {
 		const currentPage = parseInt(ctx.match[1])
 
-		// Extract flight IDs from the message text using the invisible link
 		let flightIds: string[] = []
-		const messageText = ctx.callbackQuery.message?.text || ''
 		const messageEntities = ctx.callbackQuery.message?.entities || []
 
-		console.log('****** Message text:', messageText)
-		console.log('****** Message entities:', JSON.stringify(messageEntities, null, 2))
-
-		// Look for text_link entities that contain our encoded data
 		for (const entity of messageEntities) {
-			console.log(`****** Entity type: ${entity.type}`)
 			if (entity.type === 'text_link' && 'url' in entity && entity.url?.startsWith('tg://btn/')) {
-				// Extract the base64 encoded data from the URL
 				const base64Encoded = entity.url.replace('tg://btn/', '')
-				console.log('****** Found base64 encoded:', base64Encoded)
 				try {
-					// Decode the base64 to get the flight IDs
 					const decoded = atob(base64Encoded)
 					flightIds = decoded.split(',')
-					console.log('****** Decoded flight IDs:', flightIds)
 					break
 				} catch (error) {
-					console.error('Failed to decode flight IDs from message:', error)
+					console.error('Failed to decode flight IDs:', error)
 				}
 			}
 		}
@@ -223,7 +212,6 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 			return
 		}
 
-		console.log('****** Extracted flight IDs:', flightIds)
 		const results = []
 		for (const flightId of flightIds) {
 			const flightNumber = parseFlightNumber(flightId)
@@ -233,19 +221,12 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 		await ctx.answerCallbackQuery(`Tracking ${flightIds.length} flight${flightIds.length > 1 ? 's' : ''}...`)
 
-		// Don't go to next page after tracking all flights, just refresh the current page
+		const currentText = ctx.callbackQuery.message?.text || ''
+		const newText = `${currentText}\n\n${results.join('\n')}`
+
 		const eligibleFlights = getNotTrackedFlights(ctx.validChatId, ctx.DOStore)
 		const startIndex = currentPage * 5
 		const endIndex = startIndex + 5
-		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
-
-		const {
-			text,
-			replyMarkup: suggestionsMarkup,
-			parseMode,
-		} = formatFlightSuggestions(pageFlights, currentPage, eligibleFlights.length, ctx.DOStore)
-
-		let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
 
 		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
 		const paginationRow = []
@@ -256,10 +237,9 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 		const allButtons = [...navigationButtons]
 		if (paginationRow.length > 0) allButtons.push(paginationRow)
-		allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
 
-		await ctx.editMessageText(responseText, {
-			parse_mode: (parseMode as any) || 'Markdown',
+		await ctx.editMessageText(newText, {
+			parse_mode: 'Markdown',
 			reply_markup: { inline_keyboard: allButtons },
 		})
 	})
