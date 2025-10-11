@@ -233,10 +233,9 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 
 		await ctx.answerCallbackQuery(`Tracking ${flightIds.length} flight${flightIds.length > 1 ? 's' : ''}...`)
 
-		const nextPage = currentPage + 1
-
+		// Don't go to next page after tracking all flights, just refresh the current page
 		const eligibleFlights = getNotTrackedFlights(ctx.validChatId, ctx.DOStore)
-		const startIndex = nextPage * 5
+		const startIndex = currentPage * 5
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
 
@@ -244,15 +243,16 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 			text,
 			replyMarkup: suggestionsMarkup,
 			parseMode,
-		} = formatFlightSuggestions(pageFlights, nextPage, eligibleFlights.length, ctx.DOStore)
+		} = formatFlightSuggestions(pageFlights, currentPage, eligibleFlights.length, ctx.DOStore)
 
 		let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
 
 		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
 		const paginationRow = []
-		if (nextPage > 0) paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${nextPage - 1}` })
+		if (currentPage > 0)
+			paginationRow.push({ text: '⬅️ Previous', callback_data: `suggestions_page:${currentPage - 1}` })
 		if (endIndex < eligibleFlights.length)
-			paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${nextPage + 1}` })
+			paginationRow.push({ text: 'Next ➡️', callback_data: `suggestions_page:${currentPage + 1}` })
 
 		const allButtons = [...navigationButtons]
 		if (paginationRow.length > 0) allButtons.push(paginationRow)

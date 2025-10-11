@@ -138,6 +138,13 @@ export const escapeMarkdown = (text: string) => {
 		.replace(/~/g, '\\~') // Escape tildes
 }
 
+// Helper function to escape Markdown special characters for flight numbers (less aggressive)
+export const escapeFlightNumber = (text: string) => {
+	if (!text) return ''
+	// Only escape characters that would break Markdown in flight numbers
+	return text.replace(/\*/g, '\\*').replace(/_/g, '\\_').replace(/`/g, '\\`')
+}
+
 export const formatFlightSuggestions = (
 	flights: Flight[],
 	currentPage: number = 0,
@@ -193,15 +200,15 @@ export const formatFlightSuggestions = (
 
 	// Add "Track All" button at the bottom with page information
 	// Encode flight IDs in the message text to avoid callback data size limit
-	const flightIdsStr = flights.map((f) => escapeMarkdown(f.id)).join(',')
-
+	const flightIdsStr = flights.map((f) => f.id).join(',') // Don't escape flight IDs for encoding
+	
 	// Create an invisible link with the flight IDs encoded in base64
 	const base64Encoded = btoa(flightIdsStr)
 	const invisibleLink = `<a href="tg://btn/${base64Encoded}">\u200b</a>`
-
+	
 	// Prepend the invisible link to the message
 	message = invisibleLink + message
-
+	
 	// Use minimal callback data with just the page number
 	const callbackData = `track_suggested:${currentPage}`
 	console.log(`---------- Flight IDs encoded in message, callback data: ${callbackData}`)
