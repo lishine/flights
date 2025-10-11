@@ -193,7 +193,7 @@ export const formatFlightSuggestions = (
 
 	// Add "Track All" button at the bottom with page information
 	// Limit to first 2 flights to avoid callback data size limit (64 bytes)
-	const flightsForCallback = flights.slice(0, 3)
+	const flightsForCallback = flights.slice(0, 2)
 	const callbackData = `track_suggested:${currentPage}:${flightsForCallback.map((f) => escapeMarkdown(f.id)).join(',')}`
 	console.log(
 		`---------- Original flights count: ${flights.length}, Callback flights count: ${flightsForCallback.length}`
