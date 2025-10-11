@@ -200,7 +200,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 			results.push(`✓ Now tracking ${flightNumber.toUpperCase()}`)
 		}
 
-		await ctx.answerCallbackQuery('Tracking flights...')
+		await ctx.answerCallbackQuery(`Tracking ${flightIds.length} flight${flightIds.length > 1 ? 's' : ''}...`)
 
 		const nextPage = currentPage + 1
 

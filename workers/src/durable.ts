@@ -149,8 +149,15 @@ export class FlightDO extends DurableObject<Env, DOProps> {
 
 				console.log({ 'env.ADMIN_CHAT_ID': this.env.ADMIN_CHAT_ID })
 
-				// Use the gramCtx sendTelegramMessage method
-				await this.gramCtx.sendTelegramMessage(message, { chatId: parseInt(this.env.ADMIN_CHAT_ID) })
+				// Create a minimal context for sending the message
+				const adminChatId = parseInt(this.env.ADMIN_CHAT_ID)
+				try {
+					await this.bot.api.sendMessage(adminChatId, message, {
+						parse_mode: 'Markdown',
+					})
+				} catch (telegramError) {
+					console.error('Failed to send deployment notification:', telegramError)
+				}
 
 				return new Response(JSON.stringify({ success: true, version }), {
 					status: 200,
