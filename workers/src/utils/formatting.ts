@@ -143,7 +143,7 @@ export const formatFlightSuggestions = (
 	currentPage: number = 0,
 	totalFlights: number = 0,
 	ctx?: DurableObjectState<DOProps>
-) => {
+): { text: string; replyMarkup: InlineKeyboardMarkup | null; parseMode?: string } => {
 	if (flights.length === 0) {
 		return {
 			text: 'No flights available for tracking right now (need 1+ hour until arrival).',
@@ -194,17 +194,18 @@ export const formatFlightSuggestions = (
 	// Add "Track All" button at the bottom with page information
 	// Encode flight IDs in the message text to avoid callback data size limit
 	const flightIdsStr = flights.map((f) => escapeMarkdown(f.id)).join(',')
-	
+
 	// Create an invisible link with the flight IDs encoded in base64
 	const base64Encoded = btoa(flightIdsStr)
 	const invisibleLink = `<a href="tg://btn/${base64Encoded}">\u200b</a>`
-	
+
 	// Prepend the invisible link to the message
 	message = invisibleLink + message
-	
+
 	// Use minimal callback data with just the page number
 	const callbackData = `track_suggested:${currentPage}`
 	console.log(`---------- Flight IDs encoded in message, callback data: ${callbackData}`)
+	console.log(`---------- Base64 encoded: ${base64Encoded}`)
 
 	inlineKeyboard.push([
 		{
@@ -218,6 +219,7 @@ export const formatFlightSuggestions = (
 		replyMarkup: {
 			inline_keyboard: inlineKeyboard,
 		},
+		parseMode: 'HTML', // Use HTML parse mode for the invisible link
 	}
 }
 

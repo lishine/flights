@@ -134,12 +134,11 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 	bot.callbackQuery('show_suggestions', async (ctx) => {
 		const eligibleFlights = getNotTrackedFlights(ctx.validChatId, ctx.DOStore)
 
-		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
-			eligibleFlights.slice(0, 5),
-			0,
-			eligibleFlights.length,
-			ctx.DOStore
-		)
+		const {
+			text,
+			replyMarkup: suggestionsMarkup,
+			parseMode,
+		} = formatFlightSuggestions(eligibleFlights.slice(0, 5), 0, eligibleFlights.length, ctx.DOStore)
 
 		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
 		const paginationRow =
@@ -152,7 +151,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		const responseText = `🎯 *Flight Suggestions*\n\n${text}`
 
 		await ctx.editMessageText(responseText, {
-			parse_mode: 'Markdown',
+			parse_mode: (parseMode as any) || 'Markdown',
 			reply_markup: { inline_keyboard: allButtons },
 		})
 		await ctx.answerCallbackQuery('🔄 Refreshing...')
@@ -165,12 +164,11 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
 
-		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
-			pageFlights,
-			page,
-			eligibleFlights.length,
-			ctx.DOStore
-		)
+		const {
+			text,
+			replyMarkup: suggestionsMarkup,
+			parseMode,
+		} = formatFlightSuggestions(pageFlights, page, eligibleFlights.length, ctx.DOStore)
 		const responseText = `🎯 *Flight Suggestions*\n\n${text}`
 
 		const navigationButtons = [[{ text: '🚨 View Tracked Flights', callback_data: 'show_tracked' }]]
@@ -184,7 +182,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
 
 		await ctx.editMessageText(responseText, {
-			parse_mode: 'Markdown',
+			parse_mode: (parseMode as any) || 'Markdown',
 			reply_markup: { inline_keyboard: allButtons },
 		})
 		await ctx.answerCallbackQuery('🔄 Refreshing...')
@@ -198,15 +196,21 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		const messageText = ctx.callbackQuery.message?.text || ''
 		const messageEntities = ctx.callbackQuery.message?.entities || []
 
+		console.log('****** Message text:', messageText)
+		console.log('****** Message entities:', JSON.stringify(messageEntities, null, 2))
+
 		// Look for text_link entities that contain our encoded data
 		for (const entity of messageEntities) {
-			if (entity.type === 'text_link' && entity.url?.startsWith('tg://btn/')) {
+			console.log(`****** Entity type: ${entity.type}`)
+			if (entity.type === 'text_link' && 'url' in entity && entity.url?.startsWith('tg://btn/')) {
 				// Extract the base64 encoded data from the URL
 				const base64Encoded = entity.url.replace('tg://btn/', '')
+				console.log('****** Found base64 encoded:', base64Encoded)
 				try {
 					// Decode the base64 to get the flight IDs
 					const decoded = atob(base64Encoded)
 					flightIds = decoded.split(',')
+					console.log('****** Decoded flight IDs:', flightIds)
 					break
 				} catch (error) {
 					console.error('Failed to decode flight IDs from message:', error)
@@ -236,12 +240,11 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		const endIndex = startIndex + 5
 		const pageFlights = eligibleFlights.slice(startIndex, endIndex)
 
-		const { text, replyMarkup: suggestionsMarkup } = formatFlightSuggestions(
-			pageFlights,
-			nextPage,
-			eligibleFlights.length,
-			ctx.DOStore
-		)
+		const {
+			text,
+			replyMarkup: suggestionsMarkup,
+			parseMode,
+		} = formatFlightSuggestions(pageFlights, nextPage, eligibleFlights.length, ctx.DOStore)
 
 		let responseText = `🎯 *Flight Suggestions*\n\n${text}\n\n${results.join('\n')}`
 
@@ -256,7 +259,7 @@ export const setupBotHandlers = (bot: Bot<BotContext>) => {
 		allButtons.push(...(suggestionsMarkup?.inline_keyboard || []))
 
 		await ctx.editMessageText(responseText, {
-			parse_mode: 'Markdown',
+			parse_mode: (parseMode as any) || 'Markdown',
 			reply_markup: { inline_keyboard: allButtons },
 		})
 	})
